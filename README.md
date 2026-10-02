@@ -1,6 +1,6 @@
 # iz
 
-A new Flutter project.
+A Flutter reading journal for discovering books, tracking your reading journey, and capturing what each story leaves behind.
 
 ## Getting Started
 
