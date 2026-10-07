@@ -28,7 +28,12 @@ class BookSearchPage extends StatefulWidget {
 }
 
 class _BookSearchPageState extends State<BookSearchPage> {
-  final Dio dio = Dio();
+  final Dio dio = Dio(
+    BaseOptions(
+      connectTimeout: const Duration(seconds: 5),
+      receiveTimeout: const Duration(seconds: 5),
+    ),
+  );
 
   bool isLoading = false;
   String? errorMessage;
@@ -76,25 +81,60 @@ class _BookSearchPageState extends State<BookSearchPage> {
       appBar: AppBar(
         title: const Text('İZ'),
       ),
+
       body: isLoading
           ? const Center(
         child: CircularProgressIndicator(),
       )
+
           : errorMessage != null
           ? Center(
         child: Text(errorMessage!),
       )
+
           : books.isNotEmpty
           ? ListView.builder(
         itemCount: books.length,
         itemBuilder: (context, index) {
           final book = books[index];
 
-          return ListTile(
-            title: Text(book.title),
+          return Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                children: [
+                  Container(
+                    width: 60,
+                    height: 90,
+                  ),
+
+                  const SizedBox(width: 16),
+
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(book.title),
+
+                      Text(
+                        book.authors.isNotEmpty
+                            ? book.authors[0]
+                            : 'Yazar bilinmiyor',
+                      ),
+
+                      Text(
+                        book.firstPublishYear != null
+                            ? 'İlk yayın: ${book.firstPublishYear}'
+                            : 'Yayın yılı bilinmiyor',
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
           );
         },
       )
+
           : Center(
         child: ElevatedButton(
           onPressed: searchBooks,
