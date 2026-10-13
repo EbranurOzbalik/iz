@@ -19,7 +19,9 @@ class IzApp extends StatelessWidget {
 }
 
 class BookSearchPage extends StatefulWidget {
-  const BookSearchPage({super.key});
+  const BookSearchPage({super.key, this.dio});
+
+  final Dio? dio;
 
   @override
   State<BookSearchPage> createState() {
@@ -28,30 +30,64 @@ class BookSearchPage extends StatefulWidget {
 }
 
 class _BookSearchPageState extends State<BookSearchPage> {
-  final Dio dio = Dio(
-    BaseOptions(
-      connectTimeout: const Duration(seconds: 5),
-      receiveTimeout: const Duration(seconds: 5),
-    ),
-  );
+  final TextEditingController searchController = TextEditingController();
+  final CancelToken cancelToken = CancelToken();
+  late final Dio dio;
 
   bool isLoading = false;
+  bool hasSearched = false;
+  String? inputError;
   String? errorMessage;
   List<Book> books = [];
 
+  @override
+  void initState() {
+    super.initState();
+    dio =
+        widget.dio ??
+        Dio(
+          BaseOptions(
+            connectTimeout: const Duration(seconds: 5),
+            receiveTimeout: const Duration(seconds: 5),
+          ),
+        );
+  }
+
+  @override
+  void dispose() {
+    cancelToken.cancel();
+    if (widget.dio == null) {
+      dio.close(force: true);
+    }
+    searchController.dispose();
+    super.dispose();
+  }
+
   Future<void> searchBooks() async {
+    if (isLoading) return;
+
+    final query = searchController.text.trim();
+    if (query.isEmpty) {
+      setState(() {
+        inputError = 'Bir kitap adı yaz';
+      });
+      return;
+    }
+
+    FocusScope.of(context).unfocus();
     setState(() {
       isLoading = true;
+      hasSearched = true;
+      inputError = null;
       errorMessage = null;
+      books = [];
     });
 
     try {
       final response = await dio.get(
         'https://openlibrary.org/search.json',
-        queryParameters: {
-          'q': 'Suç ve Ceza',
-          'limit': 5,
-        },
+        queryParameters: {'q': query, 'limit': 5},
+        cancelToken: cancelToken,
       );
 
       final decoded = response.data;
@@ -61,66 +97,118 @@ class _BookSearchPageState extends State<BookSearchPage> {
         return Book.fromJson(bookJson);
       }).toList();
 
+      if (!mounted) return;
       setState(() {
         books = loadedBooks;
         isLoading = false;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         isLoading = false;
         errorMessage = 'Kitaplar yüklenemedi';
       });
 
-      print('Hata detayı: $e');
+      debugPrint('Hata detayı: $e');
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('İZ'),
-      ),
-
-      body: isLoading
-          ? const Center(
-        child: CircularProgressIndicator(),
-      )
-
-          : errorMessage != null
-          ? Center(
-        child: Text(errorMessage!),
-      )
-
-          : books.isNotEmpty
-          ? ListView.builder(
-        itemCount: books.length,
-        itemBuilder: (context, index) {
-          final book = books[index];
-
-          return Card(
-            child: Padding(
+      appBar: AppBar(title: const Text('İZ')),
+      body: SafeArea(
+        child: Column(
+          children: [
+            Padding(
               padding: const EdgeInsets.all(16),
               child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Container(
-                    width: 60,
-                    height: 90,
+                  Expanded(
+                    child: TextField(
+                      controller: searchController,
+                      enabled: !isLoading,
+                      textInputAction: TextInputAction.search,
+                      decoration: InputDecoration(
+                        labelText: 'Kitap adı',
+                        hintText: 'Örn. Suç ve Ceza',
+                        border: const OutlineInputBorder(),
+                        errorText: inputError,
+                      ),
+                      onChanged: (_) {
+                        if (inputError != null) {
+                          setState(() => inputError = null);
+                        }
+                      },
+                      onSubmitted: (_) => searchBooks(),
+                    ),
                   ),
+                  const SizedBox(width: 8),
+                  ElevatedButton(
+                    onPressed: isLoading ? null : searchBooks,
+                    child: const Text('Kitap Ara'),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(child: buildResults()),
+          ],
+        ),
+      ),
+    );
+  }
 
-                  const SizedBox(width: 16),
+  Widget buildResults() {
+    if (isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
 
-                  Column(
+    if (errorMessage != null) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(errorMessage!),
+            const SizedBox(height: 12),
+            ElevatedButton(
+              onPressed: searchBooks,
+              child: const Text('Tekrar dene'),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (books.isEmpty) {
+      return Center(
+        child: Text(
+          hasSearched ? 'Kitap bulunamadı' : 'Aramak için bir kitap adı yaz',
+        ),
+      );
+    }
+
+    return ListView.builder(
+      itemCount: books.length,
+      itemBuilder: (context, index) {
+        final book = books[index];
+        return Card(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                const SizedBox(width: 60, height: 90),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(book.title),
-
                       Text(
                         book.authors.isNotEmpty
                             ? book.authors[0]
                             : 'Yazar bilinmiyor',
                       ),
-
                       Text(
                         book.firstPublishYear != null
                             ? 'İlk yayın: ${book.firstPublishYear}'
@@ -128,19 +216,12 @@ class _BookSearchPageState extends State<BookSearchPage> {
                       ),
                     ],
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
-          );
-        },
-      )
-
-          : Center(
-        child: ElevatedButton(
-          onPressed: searchBooks,
-          child: const Text('Kitapları Getir'),
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 }
