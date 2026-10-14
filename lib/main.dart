@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
 import 'book.dart';
 import 'book_cover.dart';
+import 'book_detail_page.dart';
 
 void main() {
   runApp(const IzApp());
@@ -194,31 +195,43 @@ class _BookSearchPageState extends State<BookSearchPage> {
       itemBuilder: (context, index) {
         final book = books[index];
         return Card(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              children: [
-                BookCover(book: book),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(book.title),
-                      Text(
-                        book.authors.isNotEmpty
-                            ? book.authors[0]
-                            : 'Yazar bilinmiyor',
-                      ),
-                      Text(
-                        book.firstPublishYear != null
-                            ? 'İlk yayın: ${book.firstPublishYear}'
-                            : 'Yayın yılı bilinmiyor',
-                      ),
-                    ],
-                  ),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (context) => BookDetailPage(book: book),
                 ),
-              ],
+              );
+            },
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                children: [
+                  BookCover(book: book),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(book.title),
+                        Text(
+                          book.authors.isNotEmpty
+                              ? book.authors[0]
+                              : 'Yazar bilinmiyor',
+                        ),
+                        Text(
+                          book.firstPublishYear != null
+                              ? 'İlk yayın: ${book.firstPublishYear}'
+                              : 'Yayın yılı bilinmiyor',
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  const Icon(Icons.chevron_right),
+                ],
+              ),
             ),
           ),
         );

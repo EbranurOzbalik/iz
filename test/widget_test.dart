@@ -169,4 +169,41 @@ void main() {
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('Opening book details and returning preserves search results', (
+    tester,
+  ) async {
+    await openSearch(tester);
+    await search(tester, 'Çöl');
+    returnBooks([
+      {
+        'title': 'Dune',
+        'author_name': ['Frank Herbert', 'İkinci yazar'],
+        'first_publish_year': 1965,
+        'edition_count': 120,
+      },
+      {'title': 'Başka bir kitap'},
+    ]);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Dune'));
+    await tester.pumpAndSettle();
+    expect(find.text('Kitap detayı'), findsOneWidget);
+    expect(find.text('Dune'), findsOneWidget);
+    expect(find.text('Frank Herbert, İkinci yazar'), findsOneWidget);
+    expect(find.text('1965'), findsOneWidget);
+    expect(find.text('120'), findsOneWidget);
+    expect(find.text('Başka bir kitap'), findsNothing);
+
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    expect(find.text('Kitap detayı'), findsNothing);
+    expect(find.text('Dune'), findsOneWidget);
+    expect(find.text('Başka bir kitap'), findsOneWidget);
+    expect(
+      tester.widget<TextField>(find.byType(TextField)).controller!.text,
+      'Çöl',
+    );
+    expect(requests, hasLength(1));
+  });
 }
