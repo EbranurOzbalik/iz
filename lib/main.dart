@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
 import 'book.dart';
+import 'book_cover.dart';
 
 void main() {
   runApp(const IzApp());
@@ -197,7 +198,7 @@ class _BookSearchPageState extends State<BookSearchPage> {
             padding: const EdgeInsets.all(16),
             child: Row(
               children: [
-                const SizedBox(width: 60, height: 90),
+                BookCover(book: book),
                 const SizedBox(width: 16),
                 Expanded(
                   child: Column(
