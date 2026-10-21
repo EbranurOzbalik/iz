@@ -41,13 +41,33 @@ void main() {
       'title': 'Akıl',
       'editions': {
         'docs': [
-          {'title': 'Akıl', 'subtitle': '  İnsan Olmanın Özüne Yolculuk  '},
+          {
+            'key': '/books/OL35376310M',
+            'title': 'Akıl',
+            'subtitle': '  İnsan Olmanın Özüne Yolculuk  ',
+          },
         ],
       },
     });
 
     expect(book.title, 'Akıl');
     expect(book.subtitle, 'İnsan Olmanın Özüne Yolculuk');
+    expect(book.editionKey, '/books/OL35376310M');
+    expect(book.editionUrl, 'https://openlibrary.org/books/OL35376310M.json');
+  });
+
+  test('Missing or invalid edition keys cannot produce a detail URL', () {
+    for (final key in [
+      null,
+      '',
+      '/works/OL123W',
+      '/books/../other',
+      'https://example.com',
+      '/books/OL123M?redirect=other',
+    ]) {
+      final book = Book(title: 'Kitap', authors: [], editionKey: key);
+      expect(book.editionUrl, isNull);
+    }
   });
 
   test('Work subtitle takes priority with blank values falling back', () {

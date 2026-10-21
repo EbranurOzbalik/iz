@@ -93,7 +93,8 @@ class _BookSearchPageState extends State<BookSearchPage> {
           'limit': 5,
           'fields':
               'key,title,subtitle,author_name,first_publish_year,'
-              'edition_count,cover_i,editions,editions.title,editions.subtitle',
+              'edition_count,cover_i,editions,editions.key,editions.title,'
+              'editions.subtitle',
         },
         cancelToken: cancelToken,
       );

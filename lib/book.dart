@@ -5,6 +5,7 @@ class Book {
   int? editionCount;
   final int? coverId;
   final String? subtitle;
+  final String? editionKey;
 
   Book({
     required this.title,
@@ -13,6 +14,7 @@ class Book {
     this.editionCount,
     this.coverId,
     this.subtitle,
+    this.editionKey,
   });
 
   factory Book.fromJson(Map<String, dynamic> json) {
@@ -28,6 +30,9 @@ class Book {
       firstPublishYear: json['first_publish_year'],
       editionCount: json['edition_count'],
       coverId: json['cover_i'] is int ? json['cover_i'] as int : null,
+      editionKey: matchedEdition is Map && matchedEdition['key'] is String
+          ? matchedEdition['key'] as String
+          : null,
       subtitle:
           _readSubtitle(json['subtitle']) ??
           (matchedEdition is Map
@@ -45,5 +50,13 @@ class Book {
   String? get coverUrl {
     if (coverId == null || coverId! <= 0) return null;
     return 'https://covers.openlibrary.org/b/id/$coverId-M.jpg?default=false';
+  }
+
+  String? get editionUrl {
+    final key = editionKey;
+    if (key == null || !RegExp(r'^/books/OL[0-9]+M$').hasMatch(key)) {
+      return null;
+    }
+    return 'https://openlibrary.org$key.json';
   }
 }

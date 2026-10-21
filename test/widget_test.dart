@@ -81,6 +81,7 @@ void main() {
         'edition_count',
         'cover_i',
         'editions',
+        'editions.key',
         'editions.subtitle',
       ]),
     );
