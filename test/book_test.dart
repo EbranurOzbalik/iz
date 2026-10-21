@@ -35,4 +35,66 @@ void main() {
       }
     },
   );
+
+  test('Subtitle is read from the matching edition and trimmed', () {
+    final book = Book.fromJson({
+      'title': 'Akıl',
+      'editions': {
+        'docs': [
+          {'title': 'Akıl', 'subtitle': '  İnsan Olmanın Özüne Yolculuk  '},
+        ],
+      },
+    });
+
+    expect(book.title, 'Akıl');
+    expect(book.subtitle, 'İnsan Olmanın Özüne Yolculuk');
+  });
+
+  test('Work subtitle takes priority with blank values falling back', () {
+    for (final subtitle in ['  Ana alt başlık  ', '   ']) {
+      final book = Book.fromJson({
+        'title': 'Kitap',
+        'subtitle': subtitle,
+        'editions': {
+          'docs': [
+            {'subtitle': 'Baskı alt başlığı'},
+          ],
+        },
+      });
+      expect(
+        book.subtitle,
+        subtitle.trim().isEmpty ? 'Baskı alt başlığı' : 'Ana alt başlık',
+      );
+    }
+  });
+
+  test('Missing and malformed subtitle data can be omitted safely', () {
+    for (final fields in <Map<String, dynamic>>[
+      {},
+      {'subtitle': '   '},
+      {'subtitle': 123},
+      {'editions': 'invalid'},
+      {
+        'editions': {'docs': []},
+      },
+      {
+        'editions': {'docs': 'invalid'},
+      },
+      {
+        'editions': {
+          'docs': [null],
+        },
+      },
+      {
+        'editions': {
+          'docs': [
+            {'subtitle': 123},
+          ],
+        },
+      },
+    ]) {
+      final book = Book.fromJson({'title': 'Kitap', ...fields});
+      expect(book.subtitle, isNull);
+    }
+  });
 }

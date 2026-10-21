@@ -88,7 +88,13 @@ class _BookSearchPageState extends State<BookSearchPage> {
     try {
       final response = await dio.get(
         'https://openlibrary.org/search.json',
-        queryParameters: {'q': query, 'limit': 5},
+        queryParameters: {
+          'q': query,
+          'limit': 5,
+          'fields':
+              'key,title,subtitle,author_name,first_publish_year,'
+              'edition_count,cover_i,editions,editions.title,editions.subtitle',
+        },
         cancelToken: cancelToken,
       );
 
@@ -214,7 +220,23 @@ class _BookSearchPageState extends State<BookSearchPage> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(book.title),
+                        Text(
+                          book.title,
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+                        if (book.subtitle != null) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            book.subtitle!,
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.onSurfaceVariant,
+                                ),
+                          ),
+                          const SizedBox(height: 4),
+                        ],
                         Text(
                           book.authors.isNotEmpty
                               ? book.authors[0]

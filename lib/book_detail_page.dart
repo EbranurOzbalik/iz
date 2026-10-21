@@ -29,6 +29,16 @@ class BookDetailPage extends StatelessWidget {
                     textAlign: TextAlign.center,
                     style: textTheme.headlineSmall,
                   ),
+                  if (book.subtitle != null) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      book.subtitle!,
+                      textAlign: TextAlign.center,
+                      style: textTheme.titleMedium?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 12),
                   Text(
                     book.authors.isNotEmpty

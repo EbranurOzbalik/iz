@@ -69,22 +69,37 @@ void main() {
     await openSearch(tester);
     await search(tester, '  Kürk Mantolu Madonna  ');
     expect(requests.single.path, 'https://openlibrary.org/search.json');
-    expect(requests.single.queryParameters, {
-      'q': 'Kürk Mantolu Madonna',
-      'limit': 5,
-    });
+    expect(requests.single.queryParameters['q'], 'Kürk Mantolu Madonna');
+    expect(requests.single.queryParameters['limit'], 5);
+    expect(
+      (requests.single.queryParameters['fields'] as String).split(','),
+      containsAll([
+        'title',
+        'subtitle',
+        'author_name',
+        'first_publish_year',
+        'edition_count',
+        'cover_i',
+        'editions',
+        'editions.subtitle',
+      ]),
+    );
 
     const longTitle =
         'Kürk Mantolu Madonna: Açıklamalı ve Genişletilmiş Özel Baskı';
+    const longSubtitle =
+        'Eserin yazılış sürecine ve edebiyat tarihindeki yerine dair açıklamalar';
     returnBooks([
       {
         'title': longTitle,
+        'subtitle': longSubtitle,
         'author_name': ['Sabahattin Ali'],
         'first_publish_year': 1943,
       },
     ]);
     await tester.pumpAndSettle();
     expect(find.text(longTitle), findsOneWidget);
+    expect(find.text(longSubtitle), findsOneWidget);
     expect(find.text('Sabahattin Ali'), findsOneWidget);
     expect(find.text('İlk yayın: 1943'), findsOneWidget);
     expect(find.byType(TextField), findsOneWidget);
@@ -97,6 +112,7 @@ void main() {
     ]);
     await tester.pumpAndSettle();
     expect(find.text(longTitle), findsNothing);
+    expect(find.text(longSubtitle), findsNothing);
     expect(find.text('Yazar bilinmiyor'), findsOneWidget);
     expect(find.text('Yayın yılı bilinmiyor'), findsOneWidget);
   });
@@ -206,4 +222,36 @@ void main() {
     );
     expect(requests, hasLength(1));
   });
+
+  testWidgets(
+    'Matching edition subtitle explains results on cards and details',
+    (tester) async {
+      await openSearch(tester);
+      await search(tester, 'insan olmanın');
+      returnBooks([
+        {
+          'title': 'Akıl',
+          'author_name': ['Daniel J. Siegel'],
+          'editions': {
+            'docs': [
+              {'title': 'Akıl', 'subtitle': 'İnsan Olmanın Özüne Yolculuk'},
+            ],
+          },
+        },
+      ]);
+      await tester.pumpAndSettle();
+      expect(find.text('İnsan Olmanın Özüne Yolculuk'), findsOneWidget);
+
+      await tester.tap(find.text('Akıl'));
+      await tester.pumpAndSettle();
+      expect(find.text('Kitap detayı'), findsOneWidget);
+      expect(find.text('İnsan Olmanın Özüne Yolculuk'), findsOneWidget);
+
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      expect(find.text('İnsan Olmanın Özüne Yolculuk'), findsOneWidget);
+      expect(requests, hasLength(1));
+      expect(tester.takeException(), isNull);
+    },
+  );
 }
