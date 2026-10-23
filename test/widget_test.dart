@@ -293,6 +293,92 @@ void main() {
     }
   });
 
+  testWidgets(
+    'Author search uses the author filter and switching modes resets results',
+    (tester) async {
+      tester.view.physicalSize = const Size(320, 640);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      await openSearch(tester);
+      await tester.tap(find.text('Yazar'));
+      await tester.pumpAndSettle();
+      expect(find.text('Aramak için bir yazar adı yaz'), findsOneWidget);
+      await search(tester, '   ');
+      expect(find.text('Bir yazar adı yaz'), findsOneWidget);
+      expect(requests, isEmpty);
+
+      await tester.enterText(find.byType(TextField), '  Sabahattin Ali  ');
+      await tester.testTextInput.receiveAction(TextInputAction.search);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 1));
+      expect(requests.single.queryParameters['author'], 'Sabahattin Ali');
+      expect(requests.single.queryParameters.containsKey('q'), isFalse);
+      await tester.tap(find.text('Kitap'));
+      await tester.pump();
+      expect(
+        tester.widget<TextField>(find.byType(TextField)).decoration!.labelText,
+        'Yazar adı',
+      );
+      returnBooks([
+        {
+          'title': 'Kuyucaklı Yusuf',
+          'author_name': ['Sabahattin Ali'],
+        },
+      ]);
+      await tester.pumpAndSettle();
+      expect(find.text('Kuyucaklı Yusuf'), findsOneWidget);
+
+      await tester.tap(find.text('Kuyucaklı Yusuf'));
+      await tester.pumpAndSettle();
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      expect(find.text('Kuyucaklı Yusuf'), findsOneWidget);
+      expect(
+        tester.widget<TextField>(find.byType(TextField)).decoration!.labelText,
+        'Yazar adı',
+      );
+      expect(requests, hasLength(1));
+
+      await tester.tap(find.text('Kitap'));
+      await tester.pumpAndSettle();
+      expect(find.text('Kuyucaklı Yusuf'), findsNothing);
+      expect(
+        tester.widget<TextField>(find.byType(TextField)).controller!.text,
+        isEmpty,
+      );
+      expect(find.text('Aramak için bir kitap adı yaz'), findsOneWidget);
+      await search(tester, 'Dune');
+      expect(requests.last.queryParameters['q'], 'Dune');
+      expect(requests.last.queryParameters.containsKey('author'), isFalse);
+      returnBooks([]);
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('Retry and clear keep the selected author search mode', (
+    tester,
+  ) async {
+    await openSearch(tester);
+    await tester.tap(find.text('Yazar'));
+    await tester.pumpAndSettle();
+    await search(tester, 'Sabahattin Ali');
+    pending.removeAt(0).reject(DioException(requestOptions: requests.last));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Tekrar dene'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 1));
+    expect(requests.last.queryParameters['author'], 'Sabahattin Ali');
+    expect(requests.last.queryParameters.containsKey('q'), isFalse);
+    returnBooks([]);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Aramayı temizle'));
+    await tester.pumpAndSettle();
+    expect(find.text('Aramak için bir yazar adı yaz'), findsOneWidget);
+    expect(requests, hasLength(2));
+  });
+
   testWidgets('Opening book details and returning preserves search results', (
     tester,
   ) async {

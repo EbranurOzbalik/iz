@@ -31,6 +31,8 @@ class BookSearchPage extends StatefulWidget {
   }
 }
 
+enum _SearchMode { book, author }
+
 class _BookSearchPageState extends State<BookSearchPage> {
   final TextEditingController searchController = TextEditingController();
   final CancelToken cancelToken = CancelToken();
@@ -41,6 +43,9 @@ class _BookSearchPageState extends State<BookSearchPage> {
   String? inputError;
   String? errorMessage;
   List<Book> books = [];
+  _SearchMode searchMode = _SearchMode.book;
+
+  bool get isAuthorSearch => searchMode == _SearchMode.author;
 
   @override
   void initState() {
@@ -71,7 +76,7 @@ class _BookSearchPageState extends State<BookSearchPage> {
     final query = searchController.text.trim();
     if (query.isEmpty) {
       setState(() {
-        inputError = 'Bir kitap adı yaz';
+        inputError = isAuthorSearch ? 'Bir yazar adı yaz' : 'Bir kitap adı yaz';
       });
       return;
     }
@@ -89,7 +94,7 @@ class _BookSearchPageState extends State<BookSearchPage> {
       final response = await dio.get(
         'https://openlibrary.org/search.json',
         queryParameters: {
-          'q': query,
+          (isAuthorSearch ? 'author' : 'q'): query,
           'limit': 5,
           'fields':
               'key,title,subtitle,author_name,first_publish_year,'
@@ -122,10 +127,11 @@ class _BookSearchPageState extends State<BookSearchPage> {
     }
   }
 
-  void clearSearch() {
+  void clearSearch({_SearchMode? mode}) {
     if (isLoading) return;
     searchController.clear();
     setState(() {
+      if (mode != null) searchMode = mode;
       books = [];
       hasSearched = false;
       inputError = null;
@@ -164,6 +170,28 @@ class _BookSearchPageState extends State<BookSearchPage> {
         child: Column(
           children: [
             Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: SegmentedButton<_SearchMode>(
+                  segments: const [
+                    ButtonSegment(
+                      value: _SearchMode.book,
+                      label: Text('Kitap'),
+                    ),
+                    ButtonSegment(
+                      value: _SearchMode.author,
+                      label: Text('Yazar'),
+                    ),
+                  ],
+                  selected: {searchMode},
+                  onSelectionChanged: isLoading
+                      ? null
+                      : (selection) => clearSearch(mode: selection.single),
+                ),
+              ),
+            ),
+            Padding(
               padding: const EdgeInsets.all(16),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -174,8 +202,10 @@ class _BookSearchPageState extends State<BookSearchPage> {
                       enabled: !isLoading,
                       textInputAction: TextInputAction.search,
                       decoration: InputDecoration(
-                        labelText: 'Kitap adı',
-                        hintText: 'Örn. Suç ve Ceza',
+                        labelText: isAuthorSearch ? 'Yazar adı' : 'Kitap adı',
+                        hintText: isAuthorSearch
+                            ? 'Örn. Sabahattin Ali'
+                            : 'Örn. Suç ve Ceza',
                         border: const OutlineInputBorder(),
                         errorText: inputError,
                         suffixIcon: searchController.text.isEmpty
@@ -234,7 +264,11 @@ class _BookSearchPageState extends State<BookSearchPage> {
     if (books.isEmpty) {
       return Center(
         child: Text(
-          hasSearched ? 'Kitap bulunamadı' : 'Aramak için bir kitap adı yaz',
+          hasSearched
+              ? 'Kitap bulunamadı'
+              : isAuthorSearch
+              ? 'Aramak için bir yazar adı yaz'
+              : 'Aramak için bir kitap adı yaz',
         ),
       );
     }
