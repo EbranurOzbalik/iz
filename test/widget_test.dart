@@ -131,6 +131,12 @@ void main() {
     expect(find.byType(CircularProgressIndicator), findsOneWidget);
     expect(tester.widget<TextField>(find.byType(TextField)).enabled, isFalse);
     expect(
+      tester
+          .widget<IconButton>(find.widgetWithIcon(IconButton, Icons.clear))
+          .onPressed,
+      isNull,
+    );
+    expect(
       tester.widget<ElevatedButton>(find.byType(ElevatedButton)).onPressed,
       isNull,
     );
@@ -186,6 +192,47 @@ void main() {
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets(
+    'Clearing removes the query, old results and errors without a request',
+    (tester) async {
+      await openSearch(tester);
+      expect(find.byTooltip('Aramayı temizle'), findsNothing);
+      await search(tester, 'Dune');
+      returnBooks([
+        {'title': 'Dune'},
+      ]);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byTooltip('Aramayı temizle'));
+      await tester.pumpAndSettle();
+      expect(
+        tester.widget<TextField>(find.byType(TextField)).controller!.text,
+        isEmpty,
+      );
+      expect(find.text('Dune'), findsNothing);
+      expect(find.text('Aramak için bir kitap adı yaz'), findsOneWidget);
+      expect(find.byTooltip('Aramayı temizle'), findsNothing);
+      expect(requests, hasLength(1));
+
+      await search(tester, 'Dune');
+      pending.removeAt(0).reject(DioException(requestOptions: requests.last));
+      await tester.pumpAndSettle();
+      expect(find.text('Tekrar dene'), findsOneWidget);
+      await tester.tap(find.byTooltip('Aramayı temizle'));
+      await tester.pumpAndSettle();
+      expect(find.text('Tekrar dene'), findsNothing);
+      expect(find.text('Aramak için bir kitap adı yaz'), findsOneWidget);
+      expect(requests, hasLength(2));
+
+      await search(tester, '   ');
+      expect(find.text('Bir kitap adı yaz'), findsOneWidget);
+      await tester.tap(find.byTooltip('Aramayı temizle'));
+      await tester.pumpAndSettle();
+      expect(find.text('Bir kitap adı yaz'), findsNothing);
+      expect(requests, hasLength(2));
+    },
+  );
 
   testWidgets('Search failures give relevant guidance on a narrow screen', (
     tester,

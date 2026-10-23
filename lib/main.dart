@@ -122,6 +122,17 @@ class _BookSearchPageState extends State<BookSearchPage> {
     }
   }
 
+  void clearSearch() {
+    if (isLoading) return;
+    searchController.clear();
+    setState(() {
+      books = [];
+      hasSearched = false;
+      inputError = null;
+      errorMessage = null;
+    });
+  }
+
   String searchErrorMessage(Object error) {
     if (error is DioException) {
       switch (error.type) {
@@ -167,11 +178,16 @@ class _BookSearchPageState extends State<BookSearchPage> {
                         hintText: 'Örn. Suç ve Ceza',
                         border: const OutlineInputBorder(),
                         errorText: inputError,
+                        suffixIcon: searchController.text.isEmpty
+                            ? null
+                            : IconButton(
+                                tooltip: 'Aramayı temizle',
+                                onPressed: isLoading ? null : clearSearch,
+                                icon: const Icon(Icons.clear),
+                              ),
                       ),
                       onChanged: (_) {
-                        if (inputError != null) {
-                          setState(() => inputError = null);
-                        }
+                        setState(() => inputError = null);
                       },
                       onSubmitted: (_) => searchBooks(),
                     ),
