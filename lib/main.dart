@@ -49,8 +49,8 @@ class _BookSearchPageState extends State<BookSearchPage> {
         widget.dio ??
         Dio(
           BaseOptions(
-            connectTimeout: const Duration(seconds: 5),
-            receiveTimeout: const Duration(seconds: 5),
+            connectTimeout: const Duration(seconds: 10),
+            receiveTimeout: const Duration(seconds: 30),
           ),
         );
   }
@@ -115,11 +115,34 @@ class _BookSearchPageState extends State<BookSearchPage> {
       if (!mounted) return;
       setState(() {
         isLoading = false;
-        errorMessage = 'Kitaplar yüklenemedi';
+        errorMessage = searchErrorMessage(e);
       });
 
       debugPrint('Hata detayı: $e');
     }
+  }
+
+  String searchErrorMessage(Object error) {
+    if (error is DioException) {
+      switch (error.type) {
+        case DioExceptionType.connectionTimeout:
+        case DioExceptionType.sendTimeout:
+        case DioExceptionType.receiveTimeout:
+          return 'Arama uzun sürdü. Lütfen tekrar dene.';
+        case DioExceptionType.connectionError:
+          return 'Bağlantı kurulamadı. İnternet bağlantını kontrol et.';
+        case DioExceptionType.badResponse:
+          if (error.response?.statusCode == 429) {
+            return 'Çok sık arama yapıldı. Biraz bekleyip tekrar dene.';
+          }
+          if ((error.response?.statusCode ?? 0) >= 500) {
+            return 'Kitap servisi şu an yanıt veremiyor. Daha sonra tekrar dene.';
+          }
+        default:
+          break;
+      }
+    }
+    return 'Kitaplar yüklenemedi. Lütfen tekrar dene.';
   }
 
   @override
@@ -175,16 +198,19 @@ class _BookSearchPageState extends State<BookSearchPage> {
 
     if (errorMessage != null) {
       return Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(errorMessage!),
-            const SizedBox(height: 12),
-            ElevatedButton(
-              onPressed: searchBooks,
-              child: const Text('Tekrar dene'),
-            ),
-          ],
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(errorMessage!, textAlign: TextAlign.center),
+              const SizedBox(height: 12),
+              ElevatedButton(
+                onPressed: searchBooks,
+                child: const Text('Tekrar dene'),
+              ),
+            ],
+          ),
         ),
       );
     }

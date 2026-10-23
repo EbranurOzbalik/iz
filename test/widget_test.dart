@@ -154,7 +154,7 @@ void main() {
           ),
         );
     await tester.pumpAndSettle();
-    expect(find.text('Kitaplar yüklenemedi'), findsOneWidget);
+    expect(find.text('Arama uzun sürdü. Lütfen tekrar dene.'), findsOneWidget);
 
     await tester.tap(find.text('Tekrar dene'));
     await tester.pump();
@@ -169,7 +169,7 @@ void main() {
     ]);
     await tester.pumpAndSettle();
     expect(find.text('Frank Herbert'), findsOneWidget);
-    expect(find.text('Kitaplar yüklenemedi'), findsNothing);
+    expect(find.text('Arama uzun sürdü. Lütfen tekrar dene.'), findsNothing);
     expect(find.text('Tekrar dene'), findsNothing);
   });
 
@@ -185,6 +185,65 @@ void main() {
     returnBooks([]);
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Search failures give relevant guidance on a narrow screen', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(320, 640);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await openSearch(tester);
+
+    final cases = [
+      (
+        DioExceptionType.receiveTimeout,
+        null,
+        'Arama uzun sürdü. Lütfen tekrar dene.',
+      ),
+      (
+        DioExceptionType.connectionError,
+        null,
+        'Bağlantı kurulamadı. İnternet bağlantını kontrol et.',
+      ),
+      (
+        DioExceptionType.badResponse,
+        429,
+        'Çok sık arama yapıldı. Biraz bekleyip tekrar dene.',
+      ),
+      (
+        DioExceptionType.badResponse,
+        503,
+        'Kitap servisi şu an yanıt veremiyor. Daha sonra tekrar dene.',
+      ),
+      (
+        DioExceptionType.unknown,
+        null,
+        'Kitaplar yüklenemedi. Lütfen tekrar dene.',
+      ),
+    ];
+    for (final (type, statusCode, message) in cases) {
+      await search(tester, 'Dune');
+      pending
+          .removeAt(0)
+          .reject(
+            DioException(
+              requestOptions: requests.last,
+              type: type,
+              response: statusCode == null
+                  ? null
+                  : Response(
+                      requestOptions: requests.last,
+                      statusCode: statusCode,
+                    ),
+            ),
+          );
+      await tester.pumpAndSettle();
+      expect(find.text(message), findsOneWidget);
+      expect(find.text('Tekrar dene'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    }
   });
 
   testWidgets('Opening book details and returning preserves search results', (
