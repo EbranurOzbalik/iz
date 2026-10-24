@@ -6,7 +6,7 @@ import 'package:iz/book_cover.dart';
 import 'package:iz/book_detail_page.dart';
 
 void main() {
-  group('Edition page counts', () {
+  group('Edition details', () {
     late Dio dio;
     late List<RequestOptions> requests;
     late List<RequestInterceptorHandler> pending;
@@ -62,16 +62,21 @@ void main() {
         await openDetails(tester);
         expect(find.text('Akıl'), findsOneWidget);
         expect(find.text('İnsan Olmanın Özüne Yolculuk'), findsOneWidget);
-        expect(find.text('Yükleniyor…'), findsOneWidget);
+        expect(find.text('Yükleniyor…'), findsNWidgets(2));
         expect(
           requests.single.path,
           'https://openlibrary.org/books/OL35376310M.json',
         );
 
-        returnEdition({'number_of_pages': 424});
+        returnEdition({
+          'number_of_pages': 424,
+          'publishers': ['Pegasus Yayınları'],
+        });
         await tester.pumpAndSettle();
         expect(find.text('Sayfa sayısı'), findsOneWidget);
         expect(find.text('424'), findsOneWidget);
+        expect(find.text('Yayınevi'), findsOneWidget);
+        expect(find.text('Pegasus Yayınları'), findsOneWidget);
         expect(find.text('Yükleniyor…'), findsNothing);
         expect(requests, hasLength(1));
       },
@@ -84,7 +89,13 @@ void main() {
         await openDetails(tester);
         returnEdition({'number_of_pages': count});
         await tester.pumpAndSettle();
-        expect(find.text('Bilinmiyor'), findsOneWidget);
+        expect(
+          find.descendant(
+            of: find.widgetWithText(ListTile, 'Sayfa sayısı'),
+            matching: find.text('Bilinmiyor'),
+          ),
+          findsOneWidget,
+        );
         expect(find.text('Yüklenemedi'), findsNothing);
         await tester.pumpWidget(const SizedBox());
       }
@@ -103,17 +114,21 @@ void main() {
               ),
             );
         await tester.pumpAndSettle();
-        expect(find.text('Yüklenemedi'), findsOneWidget);
+        expect(find.text('Yüklenemedi'), findsNWidgets(2));
         expect(find.text('Akıl'), findsOneWidget);
 
-        await tester.tap(find.byTooltip('Sayfa sayısını tekrar yükle'));
+        await tester.tap(find.byTooltip('Baskı bilgilerini tekrar yükle'));
         await tester.pump();
         await tester.pump(const Duration(milliseconds: 1));
-        expect(find.text('Yükleniyor…'), findsOneWidget);
+        expect(find.text('Yükleniyor…'), findsNWidgets(2));
         expect(requests, hasLength(2));
-        returnEdition({'number_of_pages': 424});
+        returnEdition({
+          'number_of_pages': 424,
+          'publishers': ['Pegasus Yayınları'],
+        });
         await tester.pumpAndSettle();
         expect(find.text('424'), findsOneWidget);
+        expect(find.text('Pegasus Yayınları'), findsOneWidget);
         expect(find.text('Yüklenemedi'), findsNothing);
       },
     );
@@ -159,7 +174,7 @@ void main() {
       expect(find.text(book.title), findsOneWidget);
       expect(find.text('Yazar bilinmiyor'), findsOneWidget);
       expect(find.text('Sayfa sayısı'), findsOneWidget);
-      expect(find.text('Bilinmiyor'), findsNWidgets(3));
+      expect(find.text('Bilinmiyor'), findsNWidgets(4));
       expect(find.bySemanticsLabel('Kapak görseli yok'), findsOneWidget);
       expect(tester.getSize(find.byType(BookCover)), const Size(120, 180));
 

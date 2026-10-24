@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import 'book.dart';
 import 'book_cover.dart';
+import 'book_edition.dart';
 
 class BookDetailPage extends StatefulWidget {
   const BookDetailPage({super.key, required this.book, this.dio});
@@ -17,7 +18,7 @@ class BookDetailPage extends StatefulWidget {
 class _BookDetailPageState extends State<BookDetailPage> {
   final CancelToken cancelToken = CancelToken();
   late final Dio dio;
-  late Future<int?> pageCount;
+  late Future<BookEdition?> editionDetails;
 
   @override
   void initState() {
@@ -30,20 +31,19 @@ class _BookDetailPageState extends State<BookDetailPage> {
             receiveTimeout: const Duration(seconds: 20),
           ),
         );
-    pageCount = loadPageCount();
+    editionDetails = loadEditionDetails();
   }
 
-  Future<int?> loadPageCount() async {
+  Future<BookEdition?> loadEditionDetails() async {
     final url = widget.book.editionUrl;
     if (url == null) return null;
 
     final response = await dio.get(url, cancelToken: cancelToken);
     final data = response.data;
-    if (data is! Map) {
+    if (data is! Map<String, dynamic>) {
       throw const FormatException('Invalid edition response');
     }
-    final count = data['number_of_pages'];
-    return count is int && count > 0 ? count : null;
+    return BookEdition.fromJson(data);
   }
 
   @override
@@ -95,32 +95,47 @@ class _BookDetailPageState extends State<BookDetailPage> {
                   ),
                   const SizedBox(height: 24),
                   const Divider(),
-                  FutureBuilder<int?>(
-                    future: pageCount,
+                  FutureBuilder<BookEdition?>(
+                    future: editionDetails,
                     builder: (context, snapshot) {
                       final isLoading =
                           snapshot.connectionState != ConnectionState.done;
-                      return ListTile(
-                        leading: const Icon(Icons.menu_book_outlined),
-                        title: const Text('Sayfa sayısı'),
-                        subtitle: Text(
-                          isLoading
-                              ? 'Yükleniyor…'
-                              : snapshot.hasError
-                              ? 'Yüklenemedi'
-                              : snapshot.data?.toString() ?? 'Bilinmiyor',
-                        ),
-                        trailing: !isLoading && snapshot.hasError
-                            ? IconButton(
-                                tooltip: 'Sayfa sayısını tekrar yükle',
-                                icon: const Icon(Icons.refresh),
-                                onPressed: () {
-                                  setState(() {
-                                    pageCount = loadPageCount();
-                                  });
-                                },
-                              )
-                            : null,
+                      final status = isLoading
+                          ? 'Yükleniyor…'
+                          : snapshot.hasError
+                          ? 'Yüklenemedi'
+                          : 'Bilinmiyor';
+                      final publishers = snapshot.data?.publishers ?? [];
+                      return Column(
+                        children: [
+                          ListTile(
+                            leading: const Icon(Icons.menu_book_outlined),
+                            title: const Text('Sayfa sayısı'),
+                            subtitle: Text(
+                              snapshot.data?.pageCount?.toString() ?? status,
+                            ),
+                            trailing: !isLoading && snapshot.hasError
+                                ? IconButton(
+                                    tooltip: 'Baskı bilgilerini tekrar yükle',
+                                    icon: const Icon(Icons.refresh),
+                                    onPressed: () {
+                                      setState(() {
+                                        editionDetails = loadEditionDetails();
+                                      });
+                                    },
+                                  )
+                                : null,
+                          ),
+                          ListTile(
+                            leading: const Icon(Icons.business_outlined),
+                            title: const Text('Yayınevi'),
+                            subtitle: Text(
+                              publishers.isNotEmpty
+                                  ? publishers.join(', ')
+                                  : status,
+                            ),
+                          ),
+                        ],
                       );
                     },
                   ),
