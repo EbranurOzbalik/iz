@@ -1,11 +1,108 @@
+import 'dart:async';
+
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:iz/book.dart';
 import 'package:iz/book_cover.dart';
 import 'package:iz/book_detail_page.dart';
 
 void main() {
+  group('Copying book information', () {
+    late List<MethodCall> clipboardCalls;
+    Future<Object?> Function(MethodCall)? clipboardHandler;
+
+    setUp(() {
+      clipboardCalls = [];
+      clipboardHandler = null;
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(SystemChannels.platform, (call) async {
+            if (call.method == 'Clipboard.setData') {
+              clipboardCalls.add(call);
+              return clipboardHandler?.call(call);
+            }
+            return null;
+          });
+    });
+
+    tearDown(() {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(SystemChannels.platform, null);
+    });
+
+    Future<void> showBook(WidgetTester tester, {bool minimal = false}) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: BookDetailPage(
+            book: Book(
+              title: 'Akıl',
+              authors: minimal ? [] : ['Daniel J. Siegel', 'İkinci yazar'],
+              subtitle: minimal ? null : 'İnsan Olmanın Özüne Yolculuk',
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('Copy includes the title, subtitle and all authors', (
+      tester,
+    ) async {
+      await showBook(tester);
+      expect(clipboardCalls, isEmpty);
+      await tester.tap(find.byTooltip('Kitap bilgisini kopyala'));
+      await tester.pumpAndSettle();
+      expect(clipboardCalls.single.arguments, {
+        'text':
+            'Akıl\nİnsan Olmanın Özüne Yolculuk\nDaniel J. Siegel, İkinci yazar',
+      });
+      expect(find.text('Kitap bilgisi kopyalandı'), findsOneWidget);
+    });
+
+    testWidgets(
+      'Clipboard failure can be retried and missing data is omitted',
+      (tester) async {
+        clipboardHandler = (_) async =>
+            throw PlatformException(code: 'unavailable');
+        await showBook(tester, minimal: true);
+        await tester.tap(find.byTooltip('Kitap bilgisini kopyala'));
+        await tester.pumpAndSettle();
+        expect(find.text('Kopyalanamadı. Lütfen tekrar dene.'), findsOneWidget);
+        expect(find.text('Kitap bilgisi kopyalandı'), findsNothing);
+        clipboardHandler = null;
+        await tester.tap(find.byTooltip('Kitap bilgisini kopyala'));
+        await tester.pumpAndSettle();
+        expect(clipboardCalls, hasLength(2));
+        expect(clipboardCalls.last.arguments, {'text': 'Akıl'});
+        expect(find.text('Kitap bilgisi kopyalandı'), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      'Leaving during a pending copy does not update a disposed page',
+      (tester) async {
+        final pendingCopy = Completer<Object?>();
+        clipboardHandler = (_) => pendingCopy.future;
+        await showBook(tester);
+        await tester.tap(find.byTooltip('Kitap bilgisini kopyala'));
+        await tester.pump();
+        expect(
+          tester
+              .widget<IconButton>(
+                find.widgetWithIcon(IconButton, Icons.copy_outlined),
+              )
+              .onPressed,
+          isNull,
+        );
+        await tester.pumpWidget(const SizedBox());
+        pendingCopy.complete(null);
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull);
+      },
+    );
+  });
+
   group('Edition details', () {
     late Dio dio;
     late List<RequestOptions> requests;

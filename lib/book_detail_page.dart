@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import 'book.dart';
 import 'book_cover.dart';
@@ -19,6 +20,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
   final CancelToken cancelToken = CancelToken();
   late final Dio dio;
   late Future<BookEdition?> editionDetails;
+  bool isCopying = false;
 
   @override
   void initState() {
@@ -46,6 +48,29 @@ class _BookDetailPageState extends State<BookDetailPage> {
     return BookEdition.fromJson(data);
   }
 
+  Future<void> copyBookInfo() async {
+    if (isCopying) return;
+    setState(() => isCopying = true);
+    final book = widget.book;
+    final text = [
+      book.title,
+      if (book.subtitle != null && book.subtitle!.trim().isNotEmpty)
+        book.subtitle!.trim(),
+      if (book.authors.isNotEmpty) book.authors.join(', '),
+    ].join('\n');
+    var message = 'Kitap bilgisi kopyalandı';
+    try {
+      await Clipboard.setData(ClipboardData(text: text));
+    } catch (_) {
+      message = 'Kopyalanamadı. Lütfen tekrar dene.';
+    }
+    if (!mounted) return;
+    setState(() => isCopying = false);
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
+  }
+
   @override
   void dispose() {
     cancelToken.cancel();
@@ -59,7 +84,16 @@ class _BookDetailPageState extends State<BookDetailPage> {
     final textTheme = Theme.of(context).textTheme;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Kitap detayı')),
+      appBar: AppBar(
+        title: const Text('Kitap detayı'),
+        actions: [
+          IconButton(
+            tooltip: 'Kitap bilgisini kopyala',
+            onPressed: isCopying ? null : copyBookInfo,
+            icon: const Icon(Icons.copy_outlined),
+          ),
+        ],
+      ),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
