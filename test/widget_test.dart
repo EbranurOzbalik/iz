@@ -35,11 +35,131 @@ void main() {
     await tester.pump(const Duration(milliseconds: 1));
   }
 
-  void returnBooks(List<Map<String, dynamic>> docs) {
+  void returnBooks(List<Map<String, dynamic>> docs, {int? total}) {
     pending
         .removeAt(0)
-        .resolve(Response(requestOptions: requests.last, data: {'docs': docs}));
+        .resolve(
+          Response(
+            requestOptions: requests.last,
+          data: {'docs': docs, 'numFound': total},
+          ),
+        );
   }
+
+  Future<void> loadMore(WidgetTester tester, {bool retry = false}) async {
+    final button = find.text(
+      retry ? 'Devamını tekrar dene' : 'Daha fazla göster',
+    );
+    await tester.scrollUntilVisible(
+      button,
+      250,
+      scrollable: find.descendant(
+        of: find.byType(ListView),
+        matching: find.byType(Scrollable),
+      ),
+    );
+    await tester.tap(button);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 1));
+  }
+
+  testWidgets(
+    'More results append to the original query and stop at the total',
+    (tester) async {
+      await openSearch(tester);
+      await search(tester, 'Dune');
+      expect(requests.single.queryParameters['offset'], 0);
+      returnBooks([
+        {'title': 'Dune'},
+      ], total: 2);
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField), 'Yeni sorgu');
+      await loadMore(tester);
+      expect(find.text('Dune'), findsOneWidget);
+      expect(requests.last.queryParameters['q'], 'Dune');
+      expect(requests.last.queryParameters['offset'], 1);
+      expect(tester.widget<TextField>(find.byType(TextField)).enabled, isFalse);
+      returnBooks([
+        {'title': 'Dune Messiah'},
+      ], total: 2);
+      await tester.pumpAndSettle();
+      expect(find.text('Dune'), findsOneWidget);
+      expect(find.text('Dune Messiah'), findsOneWidget);
+      expect(find.text('Daha fazla göster'), findsNothing);
+      await search(tester, 'Başka kitap');
+      expect(requests.last.queryParameters['offset'], 0);
+      returnBooks([
+        {'title': 'Başka kitap'},
+      ], total: 1);
+      await tester.pumpAndSettle();
+      expect(find.text('Dune Messiah'), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'A failed author continuation preserves books and retries the same offset',
+    (tester) async {
+      await openSearch(tester);
+      await tester.tap(find.text('Yazar'));
+      await tester.pumpAndSettle();
+      await search(tester, 'Sabahattin Ali');
+      returnBooks([
+        {'title': 'Kuyucaklı Yusuf'},
+      ], total: 2);
+      await tester.pumpAndSettle();
+      await loadMore(tester);
+      pending.removeAt(0).reject(DioException(requestOptions: requests.last));
+      await tester.pumpAndSettle();
+      expect(find.text('Kuyucaklı Yusuf'), findsOneWidget);
+      expect(find.text('Devamını tekrar dene'), findsOneWidget);
+      await loadMore(tester, retry: true);
+      expect(requests.last.queryParameters['author'], 'Sabahattin Ali');
+      expect(requests.last.queryParameters.containsKey('q'), isFalse);
+      expect(requests.last.queryParameters['offset'], 1);
+      returnBooks([
+        {'title': 'İçimizdeki Şeytan'},
+      ], total: 2);
+      await tester.pumpAndSettle();
+      expect(find.text('Kuyucaklı Yusuf'), findsOneWidget);
+      expect(find.text('İçimizdeki Şeytan'), findsOneWidget);
+      expect(find.text('Devamını tekrar dene'), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'An empty continuation stops paging and disposal cancels a pending page',
+    (tester) async {
+      await openSearch(tester);
+      await search(tester, 'Dune');
+      returnBooks([
+        {'title': 'Dune'},
+      ], total: 10);
+      await tester.pumpAndSettle();
+      await loadMore(tester);
+      returnBooks([], total: 10);
+      await tester.pumpAndSettle();
+      expect(
+        find.descendant(of: find.byType(Card), matching: find.text('Dune')),
+        findsOneWidget,
+      );
+      expect(find.text('Daha fazla göster'), findsNothing);
+
+      await search(tester, 'Dune');
+      returnBooks([
+        {'title': 'Dune'},
+      ], total: 10);
+      await tester.pumpAndSettle();
+      await loadMore(tester);
+      final token = requests.last.cancelToken!;
+      await tester.pumpWidget(const SizedBox());
+      expect(token.isCancelled, isTrue);
+      returnBooks([
+        {'title': 'Dune Messiah'},
+      ], total: 10);
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('Blank searches show guidance without making a request', (
     tester,

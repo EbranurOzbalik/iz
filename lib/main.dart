@@ -34,11 +34,18 @@ class BookSearchPage extends StatefulWidget {
 enum _SearchMode { book, author }
 
 class _BookSearchPageState extends State<BookSearchPage> {
+  static const pageSize = 5;
   final TextEditingController searchController = TextEditingController();
   final CancelToken cancelToken = CancelToken();
   late final Dio dio;
 
   bool isLoading = false;
+  bool isLoadingMore = false;
+  bool hasMore = false;
+  int nextOffset = 0;
+  String activeQuery = '';
+  _SearchMode activeMode = _SearchMode.book;
+  String? loadMoreError;
   bool hasSearched = false;
   String? inputError;
   String? errorMessage;
@@ -46,6 +53,7 @@ class _BookSearchPageState extends State<BookSearchPage> {
   _SearchMode searchMode = _SearchMode.book;
 
   bool get isAuthorSearch => searchMode == _SearchMode.author;
+  bool get isBusy => isLoading || isLoadingMore;
 
   @override
   void initState() {
@@ -70,10 +78,12 @@ class _BookSearchPageState extends State<BookSearchPage> {
     super.dispose();
   }
 
-  Future<void> searchBooks() async {
-    if (isLoading) return;
+  Future<void> searchBooks({bool loadMore = false}) async {
+    if (isBusy || (loadMore && !hasMore)) return;
 
-    final query = searchController.text.trim();
+    final query = loadMore ? activeQuery : searchController.text.trim();
+    final mode = loadMore ? activeMode : searchMode;
+    final offset = loadMore ? nextOffset : 0;
     if (query.isEmpty) {
       setState(() {
         inputError = isAuthorSearch ? 'Bir yazar adı yaz' : 'Bir kitap adı yaz';
@@ -83,19 +93,29 @@ class _BookSearchPageState extends State<BookSearchPage> {
 
     FocusScope.of(context).unfocus();
     setState(() {
-      isLoading = true;
-      hasSearched = true;
-      inputError = null;
-      errorMessage = null;
-      books = [];
+      loadMoreError = null;
+      if (loadMore) {
+        isLoadingMore = true;
+      } else {
+        isLoading = true;
+        hasSearched = true;
+        inputError = null;
+        errorMessage = null;
+        books = [];
+        hasMore = false;
+        nextOffset = 0;
+        activeQuery = query;
+        activeMode = mode;
+      }
     });
 
     try {
       final response = await dio.get(
         'https://openlibrary.org/search.json',
         queryParameters: {
-          (isAuthorSearch ? 'author' : 'q'): query,
-          'limit': 5,
+          (mode == _SearchMode.author ? 'author' : 'q'): query,
+          'limit': pageSize,
+          'offset': offset,
           'fields':
               'key,title,subtitle,author_name,first_publish_year,'
               'edition_count,cover_i,editions,editions.key,editions.title,'
@@ -110,17 +130,31 @@ class _BookSearchPageState extends State<BookSearchPage> {
       final List<Book> loadedBooks = docs.map<Book>((bookJson) {
         return Book.fromJson(bookJson);
       }).toList();
+      final total = decoded['numFound'] ?? decoded['num_found'];
+      final totalResults = total is int && total >= 0 ? total : null;
 
       if (!mounted) return;
       setState(() {
-        books = loadedBooks;
+        books = loadMore ? [...books, ...loadedBooks] : loadedBooks;
+        nextOffset = offset + loadedBooks.length;
+        hasMore =
+            loadedBooks.isNotEmpty &&
+            (totalResults != null
+                ? nextOffset < totalResults
+                : loadedBooks.length == pageSize);
         isLoading = false;
+        isLoadingMore = false;
       });
     } catch (e) {
       if (!mounted) return;
       setState(() {
         isLoading = false;
-        errorMessage = searchErrorMessage(e);
+        isLoadingMore = false;
+        if (loadMore) {
+          loadMoreError = searchErrorMessage(e);
+        } else {
+          errorMessage = searchErrorMessage(e);
+        }
       });
 
       debugPrint('Hata detayı: $e');
@@ -128,7 +162,7 @@ class _BookSearchPageState extends State<BookSearchPage> {
   }
 
   void clearSearch({_SearchMode? mode}) {
-    if (isLoading) return;
+    if (isBusy) return;
     searchController.clear();
     setState(() {
       if (mode != null) searchMode = mode;
@@ -136,6 +170,10 @@ class _BookSearchPageState extends State<BookSearchPage> {
       hasSearched = false;
       inputError = null;
       errorMessage = null;
+      loadMoreError = null;
+      hasMore = false;
+      nextOffset = 0;
+      activeQuery = '';
     });
   }
 
@@ -185,7 +223,7 @@ class _BookSearchPageState extends State<BookSearchPage> {
                     ),
                   ],
                   selected: {searchMode},
-                  onSelectionChanged: isLoading
+                  onSelectionChanged: isBusy
                       ? null
                       : (selection) => clearSearch(mode: selection.single),
                 ),
@@ -199,7 +237,7 @@ class _BookSearchPageState extends State<BookSearchPage> {
                   Expanded(
                     child: TextField(
                       controller: searchController,
-                      enabled: !isLoading,
+                      enabled: !isBusy,
                       textInputAction: TextInputAction.search,
                       decoration: InputDecoration(
                         labelText: isAuthorSearch ? 'Yazar adı' : 'Kitap adı',
@@ -212,7 +250,7 @@ class _BookSearchPageState extends State<BookSearchPage> {
                             ? null
                             : IconButton(
                                 tooltip: 'Aramayı temizle',
-                                onPressed: isLoading ? null : clearSearch,
+                                onPressed: isBusy ? null : clearSearch,
                                 icon: const Icon(Icons.clear),
                               ),
                       ),
@@ -224,7 +262,7 @@ class _BookSearchPageState extends State<BookSearchPage> {
                   ),
                   const SizedBox(width: 8),
                   ElevatedButton(
-                    onPressed: isLoading ? null : searchBooks,
+                    onPressed: isBusy ? null : searchBooks,
                     child: const Text('Kitap Ara'),
                   ),
                 ],
@@ -274,8 +312,31 @@ class _BookSearchPageState extends State<BookSearchPage> {
     }
 
     return ListView.builder(
-      itemCount: books.length,
+      itemCount: books.length + (hasMore ? 1 : 0),
       itemBuilder: (context, index) {
+        if (index == books.length) {
+          return Padding(
+            padding: const EdgeInsets.all(16),
+            child: isLoadingMore
+                ? const Center(child: CircularProgressIndicator())
+                : Column(
+                    children: [
+                      if (loadMoreError != null) ...[
+                        Text(loadMoreError!, textAlign: TextAlign.center),
+                        const SizedBox(height: 8),
+                      ],
+                      OutlinedButton(
+                        onPressed: () => searchBooks(loadMore: true),
+                        child: Text(
+                          loadMoreError == null
+                              ? 'Daha fazla göster'
+                              : 'Devamını tekrar dene',
+                        ),
+                      ),
+                    ],
+                  ),
+          );
+        }
         final book = books[index];
         return Card(
           clipBehavior: Clip.antiAlias,
