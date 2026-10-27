@@ -33,6 +33,17 @@ class BookSearchPage extends StatefulWidget {
 
 enum _SearchMode { book, author }
 
+enum _SearchSort {
+  relevance('En ilgili', null),
+  newest('İlk yayın: en yeni', 'new'),
+  oldest('İlk yayın: en eski', 'old');
+
+  const _SearchSort(this.label, this.parameter);
+
+  final String label;
+  final String? parameter;
+}
+
 class _BookSearchPageState extends State<BookSearchPage> {
   static const pageSize = 5;
   final TextEditingController searchController = TextEditingController();
@@ -51,6 +62,7 @@ class _BookSearchPageState extends State<BookSearchPage> {
   String? errorMessage;
   List<Book> books = [];
   _SearchMode searchMode = _SearchMode.book;
+  _SearchSort searchSort = _SearchSort.relevance;
 
   bool get isAuthorSearch => searchMode == _SearchMode.author;
   bool get isBusy => isLoading || isLoadingMore;
@@ -78,11 +90,15 @@ class _BookSearchPageState extends State<BookSearchPage> {
     super.dispose();
   }
 
-  Future<void> searchBooks({bool loadMore = false}) async {
+  Future<void> searchBooks({
+    bool loadMore = false,
+    bool repeatSearch = false,
+  }) async {
     if (isBusy || (loadMore && !hasMore)) return;
 
-    final query = loadMore ? activeQuery : searchController.text.trim();
-    final mode = loadMore ? activeMode : searchMode;
+    final useActiveSearch = loadMore || repeatSearch;
+    final query = useActiveSearch ? activeQuery : searchController.text.trim();
+    final mode = useActiveSearch ? activeMode : searchMode;
     final offset = loadMore ? nextOffset : 0;
     if (query.isEmpty) {
       setState(() {
@@ -116,6 +132,7 @@ class _BookSearchPageState extends State<BookSearchPage> {
           (mode == _SearchMode.author ? 'author' : 'q'): query,
           'limit': pageSize,
           'offset': offset,
+          if (searchSort != _SearchSort.relevance) 'sort': searchSort.parameter,
           'fields':
               'key,title,subtitle,author_name,first_publish_year,'
               'edition_count,cover_i,editions,editions.key,editions.title,'
@@ -159,6 +176,12 @@ class _BookSearchPageState extends State<BookSearchPage> {
 
       debugPrint('Hata detayı: $e');
     }
+  }
+
+  void changeSort(_SearchSort? sort) {
+    if (isBusy || sort == null || sort == searchSort) return;
+    setState(() => searchSort = sort);
+    if (hasSearched) searchBooks(repeatSearch: true);
   }
 
   void clearSearch({_SearchMode? mode}) {
@@ -268,6 +291,22 @@ class _BookSearchPageState extends State<BookSearchPage> {
                 ],
               ),
             ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: Tooltip(
+                message: 'Sonuçları sırala',
+                child: DropdownButton<_SearchSort>(
+                  value: searchSort,
+                  isExpanded: true,
+                  icon: const Icon(Icons.sort),
+                  items: [
+                    for (final sort in _SearchSort.values)
+                      DropdownMenuItem(value: sort, child: Text(sort.label)),
+                  ],
+                  onChanged: isBusy ? null : changeSort,
+                ),
+              ),
+            ),
             Expanded(child: buildResults()),
           ],
         ),
@@ -290,7 +329,7 @@ class _BookSearchPageState extends State<BookSearchPage> {
               Text(errorMessage!, textAlign: TextAlign.center),
               const SizedBox(height: 12),
               ElevatedButton(
-                onPressed: searchBooks,
+                onPressed: () => searchBooks(repeatSearch: true),
                 child: const Text('Tekrar dene'),
               ),
             ],

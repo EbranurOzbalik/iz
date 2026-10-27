@@ -41,7 +41,7 @@ void main() {
         .resolve(
           Response(
             requestOptions: requests.last,
-          data: {'docs': docs, 'numFound': total},
+            data: {'docs': docs, 'numFound': total},
           ),
         );
   }
@@ -62,6 +62,120 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 1));
   }
+
+  Future<void> selectSort(WidgetTester tester, String label) async {
+    await tester.tap(find.byTooltip('Sonuçları sırala'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(label).last);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 1));
+  }
+
+  testWidgets(
+    'Sorting restarts the submitted search and keeps its order across pages',
+    (tester) async {
+      await openSearch(tester);
+      await search(tester, 'Dune');
+      expect(requests.single.queryParameters.containsKey('sort'), isFalse);
+      returnBooks([
+        {'title': 'İlgili sonuç'},
+      ], total: 3);
+      await tester.pumpAndSettle();
+      await loadMore(tester);
+      returnBooks([
+        {'title': 'İkinci ilgili sonuç'},
+      ], total: 3);
+      await tester.pumpAndSettle();
+
+      await tester.enterText(find.byType(TextField), 'Henüz aranmayan taslak');
+      await selectSort(tester, 'İlk yayın: en yeni');
+      expect(requests.last.queryParameters['q'], 'Dune');
+      expect(requests.last.queryParameters['sort'], 'new');
+      expect(requests.last.queryParameters['offset'], 0);
+      expect(find.text('İlgili sonuç'), findsNothing);
+      expect(find.text('İkinci ilgili sonuç'), findsNothing);
+      expect(
+        tester.widget<TextField>(find.byType(TextField)).controller!.text,
+        'Henüz aranmayan taslak',
+      );
+      expect(
+        tester
+            .widget<DropdownButton<dynamic>>(
+              find.byWidgetPredicate((widget) => widget is DropdownButton),
+            )
+            .onChanged,
+        isNull,
+      );
+      returnBooks([
+        {'title': 'En yeni kitap', 'first_publish_year': 2020},
+      ], total: 2);
+      await tester.pumpAndSettle();
+      await loadMore(tester);
+      expect(requests.last.queryParameters['q'], 'Dune');
+      expect(requests.last.queryParameters['sort'], 'new');
+      expect(requests.last.queryParameters['offset'], 1);
+      returnBooks([
+        {'title': 'Daha eski kitap', 'first_publish_year': 1965},
+      ], total: 2);
+      await tester.pumpAndSettle();
+      expect(find.text('En yeni kitap'), findsOneWidget);
+      expect(find.text('Daha eski kitap'), findsOneWidget);
+      expect(find.text('Daha fazla göster'), findsNothing);
+
+      await selectSort(tester, 'En ilgili');
+      expect(requests.last.queryParameters.containsKey('sort'), isFalse);
+      expect(requests.last.queryParameters['offset'], 0);
+      expect(requests.last.queryParameters['q'], 'Dune');
+      returnBooks([], total: 0);
+      await tester.pumpAndSettle();
+      expect(find.text('Kitap bulunamadı'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'Sort selection works before searching and survives retries and clearing',
+    (tester) async {
+      tester.view.physicalSize = const Size(320, 640);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      await openSearch(tester);
+      await selectSort(tester, 'İlk yayın: en eski');
+      await tester.pumpAndSettle();
+      expect(requests, isEmpty);
+      await tester.tap(find.text('Yazar'));
+      await tester.pumpAndSettle();
+      await search(tester, 'Sabahattin Ali');
+      expect(requests.single.queryParameters['author'], 'Sabahattin Ali');
+      expect(requests.single.queryParameters['sort'], 'old');
+      pending.removeAt(0).reject(DioException(requestOptions: requests.last));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField), 'Yeni taslak');
+      await tester.tap(find.text('Tekrar dene'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 1));
+      expect(requests.last.queryParameters['author'], 'Sabahattin Ali');
+      expect(requests.last.queryParameters['sort'], 'old');
+      returnBooks([
+        {'title': 'Kuyucaklı Yusuf', 'first_publish_year': 1937},
+      ], total: 1);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Aramayı temizle'));
+      await tester.pumpAndSettle();
+      expect(find.text('Kuyucaklı Yusuf'), findsNothing);
+      await selectSort(tester, 'İlk yayın: en yeni');
+      await tester.pumpAndSettle();
+      expect(requests, hasLength(2));
+      await search(tester, 'Yaşar Kemal');
+      expect(requests.last.queryParameters['author'], 'Yaşar Kemal');
+      expect(requests.last.queryParameters['sort'], 'new');
+      expect(requests.last.queryParameters['offset'], 0);
+      returnBooks([], total: 0);
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets(
     'More results append to the original query and stop at the total',
