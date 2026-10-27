@@ -159,7 +159,7 @@ void main() {
         await openDetails(tester);
         expect(find.text('Akıl'), findsOneWidget);
         expect(find.text('İnsan Olmanın Özüne Yolculuk'), findsOneWidget);
-        expect(find.text('Yükleniyor…'), findsNWidgets(2));
+        expect(find.text('Yükleniyor…'), findsNWidgets(3));
         expect(
           requests.single.path,
           'https://openlibrary.org/books/OL35376310M.json',
@@ -168,14 +168,55 @@ void main() {
         returnEdition({
           'number_of_pages': 424,
           'publishers': ['Pegasus Yayınları'],
+          'isbn_13': ['9786052997420'],
         });
         await tester.pumpAndSettle();
         expect(find.text('Sayfa sayısı'), findsOneWidget);
         expect(find.text('424'), findsOneWidget);
         expect(find.text('Yayınevi'), findsOneWidget);
         expect(find.text('Pegasus Yayınları'), findsOneWidget);
+        expect(find.text('9786052997420'), findsOneWidget);
         expect(find.text('Yükleniyor…'), findsNothing);
         expect(requests, hasLength(1));
+      },
+    );
+
+    testWidgets(
+      'ISBN stays readable on a narrow screen and copies only its number',
+      (tester) async {
+        tester.view.physicalSize = const Size(320, 640);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        tester.platformDispatcher.textScaleFactorTestValue = 1.6;
+        addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+        final clipboardCalls = <MethodCall>[];
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(SystemChannels.platform, (call) async {
+              if (call.method == 'Clipboard.setData') clipboardCalls.add(call);
+              return null;
+            });
+        addTearDown(() {
+          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+              .setMockMethodCallHandler(SystemChannels.platform, null);
+        });
+
+        await openDetails(tester);
+        expect(find.byTooltip('ISBN numarasını kopyala'), findsNothing);
+        returnEdition({
+          'isbn_13': ['978-605-299-742-0'],
+        });
+        await tester.pumpAndSettle();
+        await tester.ensureVisible(find.byTooltip('ISBN numarasını kopyala'));
+        await tester.pumpAndSettle();
+        expect(find.text('9786052997420'), findsOneWidget);
+        expect(clipboardCalls, isEmpty);
+        await tester.tap(find.byTooltip('ISBN numarasını kopyala'));
+        await tester.pumpAndSettle();
+        expect(clipboardCalls.single.arguments, {'text': '9786052997420'});
+        expect(find.text('ISBN kopyalandı'), findsOneWidget);
+        expect(requests, hasLength(1));
+        expect(tester.takeException(), isNull);
       },
     );
 
@@ -193,6 +234,14 @@ void main() {
           ),
           findsOneWidget,
         );
+        expect(
+          find.descendant(
+            of: find.widgetWithText(ListTile, 'ISBN'),
+            matching: find.text('Bilinmiyor'),
+          ),
+          findsOneWidget,
+        );
+        expect(find.byTooltip('ISBN numarasını kopyala'), findsNothing);
         expect(find.text('Yüklenemedi'), findsNothing);
         await tester.pumpWidget(const SizedBox());
       }
@@ -211,21 +260,24 @@ void main() {
               ),
             );
         await tester.pumpAndSettle();
-        expect(find.text('Yüklenemedi'), findsNWidgets(2));
+        expect(find.text('Yüklenemedi'), findsNWidgets(3));
+        expect(find.byTooltip('ISBN numarasını kopyala'), findsNothing);
         expect(find.text('Akıl'), findsOneWidget);
 
         await tester.tap(find.byTooltip('Baskı bilgilerini tekrar yükle'));
         await tester.pump();
         await tester.pump(const Duration(milliseconds: 1));
-        expect(find.text('Yükleniyor…'), findsNWidgets(2));
+        expect(find.text('Yükleniyor…'), findsNWidgets(3));
         expect(requests, hasLength(2));
         returnEdition({
           'number_of_pages': 424,
           'publishers': ['Pegasus Yayınları'],
+          'isbn_10': ['6052997427'],
         });
         await tester.pumpAndSettle();
         expect(find.text('424'), findsOneWidget);
         expect(find.text('Pegasus Yayınları'), findsOneWidget);
+        expect(find.text('6052997427'), findsOneWidget);
         expect(find.text('Yüklenemedi'), findsNothing);
       },
     );
@@ -271,7 +323,8 @@ void main() {
       expect(find.text(book.title), findsOneWidget);
       expect(find.text('Yazar bilinmiyor'), findsOneWidget);
       expect(find.text('Sayfa sayısı'), findsOneWidget);
-      expect(find.text('Bilinmiyor'), findsNWidgets(4));
+      expect(find.text('Bilinmiyor'), findsNWidgets(5));
+      expect(find.byTooltip('ISBN numarasını kopyala'), findsNothing);
       expect(find.bySemanticsLabel('Kapak görseli yok'), findsOneWidget);
       expect(tester.getSize(find.byType(BookCover)), const Size(120, 180));
 

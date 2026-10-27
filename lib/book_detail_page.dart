@@ -48,9 +48,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
     return BookEdition.fromJson(data);
   }
 
-  Future<void> copyBookInfo() async {
-    if (isCopying) return;
-    setState(() => isCopying = true);
+  Future<void> copyBookInfo() {
     final book = widget.book;
     final text = [
       book.title,
@@ -58,7 +56,13 @@ class _BookDetailPageState extends State<BookDetailPage> {
         book.subtitle!.trim(),
       if (book.authors.isNotEmpty) book.authors.join(', '),
     ].join('\n');
-    var message = 'Kitap bilgisi kopyalandı';
+    return copyText(text, 'Kitap bilgisi kopyalandı');
+  }
+
+  Future<void> copyText(String text, String successMessage) async {
+    if (isCopying) return;
+    setState(() => isCopying = true);
+    var message = successMessage;
     try {
       await Clipboard.setData(ClipboardData(text: text));
     } catch (_) {
@@ -140,6 +144,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
                           ? 'Yüklenemedi'
                           : 'Bilinmiyor';
                       final publishers = snapshot.data?.publishers ?? [];
+                      final isbn = snapshot.data?.isbn;
                       return Column(
                         children: [
                           ListTile(
@@ -168,6 +173,21 @@ class _BookDetailPageState extends State<BookDetailPage> {
                                   ? publishers.join(', ')
                                   : status,
                             ),
+                          ),
+                          ListTile(
+                            leading: const Icon(Icons.numbers),
+                            title: const Text('ISBN'),
+                            subtitle: Text(isbn ?? status),
+                            trailing: isbn == null
+                                ? null
+                                : IconButton(
+                                    tooltip: 'ISBN numarasını kopyala',
+                                    onPressed: isCopying
+                                        ? null
+                                        : () =>
+                                              copyText(isbn, 'ISBN kopyalandı'),
+                                    icon: const Icon(Icons.copy_outlined),
+                                  ),
                           ),
                         ],
                       );

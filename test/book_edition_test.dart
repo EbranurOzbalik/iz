@@ -31,6 +31,63 @@ void main() {
       final edition = BookEdition.fromJson(data);
       expect(edition.pageCount, isNull);
       expect(edition.publishers, isEmpty);
+      expect(edition.isbn, isNull);
+    }
+  });
+
+  test(
+    'ISBN-13 is preferred and normalized after invalid entries are skipped',
+    () {
+      final edition = BookEdition.fromJson({
+        'isbn_13': [
+          null,
+          9786052997420,
+          '',
+          '9786052997421',
+          ' 978-605-299-742-0 ',
+        ],
+        'isbn_10': ['6052997427'],
+      });
+      expect(edition.isbn, '9786052997420');
+    },
+  );
+
+  test(
+    'ISBN-10 fallback preserves leading zero and normalizes its X check digit',
+    () {
+      final edition = BookEdition.fromJson({
+        'isbn_13': ['9786052997421'],
+        'isbn_10': ['6052997420', ' 0-8044-2957-x '],
+      });
+      expect(edition.isbn, '080442957X');
+      expect(
+        BookEdition.fromJson({
+          'isbn_10': ['6052997427'],
+        }).isbn,
+        '6052997427',
+      );
+    },
+  );
+
+  test('Missing, malformed and incorrect ISBN check digits are ignored', () {
+    for (final data in <Map<String, dynamic>>[
+      {},
+      {'isbn_13': '9786052997420', 'isbn_10': 6052997427},
+      {
+        'isbn_13': [null, true, ''],
+        'isbn_10': [],
+      },
+      {
+        'isbn_13': [
+          '9786052997421',
+          '978605299742X',
+          '978605299742',
+          '1234567890128',
+        ],
+        'isbn_10': ['6052997420', 'X80442957X', '080442957', '080442957XX'],
+      },
+    ]) {
+      expect(BookEdition.fromJson(data).isbn, isNull);
     }
   });
 }
