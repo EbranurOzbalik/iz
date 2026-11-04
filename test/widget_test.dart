@@ -75,6 +75,110 @@ void main() {
     await tester.pump(const Duration(milliseconds: 1));
   }
 
+  testWidgets(
+    'Author discovery preserves the original search and book details',
+    (tester) async {
+      await openSearch(tester);
+      await selectSort(tester, 'İlk yayın: en eski');
+      await tester.pumpAndSettle();
+      await search(tester, 'Çöl');
+      returnBooks([
+        {
+          'title': 'Dune',
+          'author_name': [
+            'Frank Herbert',
+            ' Brian Herbert ',
+            'Brian Herbert',
+            ' ',
+          ],
+        },
+      ], total: 1);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Dune'));
+      await tester.pumpAndSettle();
+      expect(find.text('Frank Herbert kitapları'), findsOneWidget);
+      expect(find.text('Brian Herbert kitapları'), findsOneWidget);
+      expect(find.byType(TextButton), findsNWidgets(2));
+
+      await tester.tap(find.text('Brian Herbert kitapları'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 350));
+      expect(requests, hasLength(2));
+      expect(requests.last.queryParameters['author'], 'Brian Herbert');
+      expect(requests.last.queryParameters.containsKey('q'), isFalse);
+      expect(requests.last.queryParameters.containsKey('sort'), isFalse);
+      expect(requests.last.queryParameters['offset'], 0);
+      expect(
+        tester.widget<TextField>(find.byType(TextField)).controller!.text,
+        'Brian Herbert',
+      );
+      returnBooks([
+        {'title': 'Dune: House Atreides'},
+      ], total: 1);
+      await tester.pumpAndSettle();
+      expect(find.text('Dune: House Atreides'), findsOneWidget);
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      expect(find.text('Kitap detayı'), findsOneWidget);
+      expect(find.text('Dune'), findsOneWidget);
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      expect(find.text('Dune'), findsOneWidget);
+      expect(find.text('1 sonuç • 1 kitap gösteriliyor'), findsOneWidget);
+      expect(find.text('İlk yayın: en eski'), findsOneWidget);
+      expect(
+        tester.widget<TextField>(find.byType(TextField)).controller!.text,
+        'Çöl',
+      );
+      expect(requests, hasLength(2));
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('Leaving author discovery cancels only its own request', (
+    tester,
+  ) async {
+    await openSearch(tester);
+    await search(tester, 'Çöl');
+    returnBooks([
+      {
+        'title': 'Dune',
+        'author_name': ['Frank Herbert'],
+      },
+    ]);
+    await tester.pumpAndSettle();
+    final originalToken = requests.single.cancelToken!;
+    await tester.tap(find.text('Dune'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Frank Herbert kitapları'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 350));
+    await tester.pump();
+    final authorToken = requests.last.cancelToken!;
+    await tester.tap(find.byTooltip('Back').hitTestable());
+    await tester.pumpAndSettle();
+    expect(authorToken.isCancelled, isTrue);
+    expect(originalToken.isCancelled, isFalse);
+    returnBooks([
+      {'title': 'Geç gelen sonuç'},
+    ]);
+    await tester.pumpAndSettle();
+    expect(find.text('Geç gelen sonuç'), findsNothing);
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    await search(tester, 'Başka kitap');
+    returnBooks([
+      {'title': 'Yeni sonuç'},
+    ]);
+    await tester.pumpAndSettle();
+    expect(find.text('Yeni sonuç'), findsOneWidget);
+    await tester.tap(find.text('Yeni sonuç'));
+    await tester.pumpAndSettle();
+    expect(find.byType(TextButton), findsNothing);
+    expect(find.text('Yazar bilinmiyor'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('Result counts distinguish approximate and unavailable totals', (
     tester,
   ) async {

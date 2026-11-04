@@ -21,9 +21,10 @@ class IzApp extends StatelessWidget {
 }
 
 class BookSearchPage extends StatefulWidget {
-  const BookSearchPage({super.key, this.dio});
+  const BookSearchPage({super.key, this.dio, this.initialAuthor});
 
   final Dio? dio;
+  final String? initialAuthor;
 
   @override
   State<BookSearchPage> createState() {
@@ -80,6 +81,14 @@ class _BookSearchPageState extends State<BookSearchPage> {
             receiveTimeout: const Duration(seconds: 30),
           ),
         );
+    final author = widget.initialAuthor?.trim();
+    if (author != null && author.isNotEmpty) {
+      searchMode = _SearchMode.author;
+      searchController.text = author;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) searchBooks();
+      });
+    }
   }
 
   @override
@@ -408,7 +417,19 @@ class _BookSearchPageState extends State<BookSearchPage> {
             onTap: () {
               Navigator.of(context).push(
                 MaterialPageRoute<void>(
-                  builder: (context) => BookDetailPage(book: book),
+                  builder: (detailContext) => BookDetailPage(
+                    book: book,
+                    onSearchAuthor: (author) {
+                      Navigator.of(detailContext).push(
+                        MaterialPageRoute<void>(
+                          builder: (context) => BookSearchPage(
+                            dio: widget.dio,
+                            initialAuthor: author,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
                 ),
               );
             },

@@ -7,10 +7,16 @@ import 'book_cover.dart';
 import 'book_edition.dart';
 
 class BookDetailPage extends StatefulWidget {
-  const BookDetailPage({super.key, required this.book, this.dio});
+  const BookDetailPage({
+    super.key,
+    required this.book,
+    this.dio,
+    this.onSearchAuthor,
+  });
 
   final Book book;
   final Dio? dio;
+  final ValueChanged<String>? onSearchAuthor;
 
   @override
   State<BookDetailPage> createState() => _BookDetailPageState();
@@ -86,6 +92,10 @@ class _BookDetailPageState extends State<BookDetailPage> {
   Widget build(BuildContext context) {
     final book = widget.book;
     final textTheme = Theme.of(context).textTheme;
+    final searchableAuthors = book.authors
+        .map((name) => name.trim())
+        .where((name) => name.isNotEmpty)
+        .toSet();
 
     return Scaffold(
       appBar: AppBar(
@@ -131,6 +141,16 @@ class _BookDetailPageState extends State<BookDetailPage> {
                     textAlign: TextAlign.center,
                     style: textTheme.bodyLarge,
                   ),
+                  if (widget.onSearchAuthor != null)
+                    for (final author in searchableAuthors)
+                      TextButton.icon(
+                        onPressed: () => widget.onSearchAuthor!(author),
+                        icon: const Icon(Icons.search),
+                        label: Text(
+                          '$author kitapları',
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
                   const SizedBox(height: 24),
                   const Divider(),
                   FutureBuilder<BookEdition?>(
