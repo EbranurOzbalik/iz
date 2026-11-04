@@ -54,6 +54,8 @@ class _BookSearchPageState extends State<BookSearchPage> {
   bool isLoadingMore = false;
   bool hasMore = false;
   int nextOffset = 0;
+  int? totalResults;
+  bool totalIsExact = true;
   String activeQuery = '';
   _SearchMode activeMode = _SearchMode.book;
   String? loadMoreError;
@@ -120,6 +122,8 @@ class _BookSearchPageState extends State<BookSearchPage> {
         books = [];
         hasMore = false;
         nextOffset = 0;
+        totalResults = null;
+        totalIsExact = true;
         activeQuery = query;
         activeMode = mode;
       }
@@ -148,16 +152,20 @@ class _BookSearchPageState extends State<BookSearchPage> {
         return Book.fromJson(bookJson);
       }).toList();
       final total = decoded['numFound'] ?? decoded['num_found'];
-      final totalResults = total is int && total >= 0 ? total : null;
+      final reportedTotal = total is int && total >= offset + loadedBooks.length
+          ? total
+          : null;
 
       if (!mounted) return;
       setState(() {
         books = loadMore ? [...books, ...loadedBooks] : loadedBooks;
         nextOffset = offset + loadedBooks.length;
+        totalResults = reportedTotal;
+        totalIsExact = decoded['numFoundExact'] != false;
         hasMore =
             loadedBooks.isNotEmpty &&
-            (totalResults != null
-                ? nextOffset < totalResults
+            (reportedTotal != null
+                ? nextOffset < reportedTotal
                 : loadedBooks.length == pageSize);
         isLoading = false;
         isLoadingMore = false;
@@ -196,6 +204,8 @@ class _BookSearchPageState extends State<BookSearchPage> {
       loadMoreError = null;
       hasMore = false;
       nextOffset = 0;
+      totalResults = null;
+      totalIsExact = true;
       activeQuery = '';
     });
   }
@@ -351,9 +361,24 @@ class _BookSearchPageState extends State<BookSearchPage> {
     }
 
     return ListView.builder(
-      itemCount: books.length + (hasMore ? 1 : 0),
+      itemCount: 1 + books.length + (hasMore ? 1 : 0),
       itemBuilder: (context, index) {
-        if (index == books.length) {
+        if (index == 0) {
+          final loadedLabel = '${books.length} kitap gösteriliyor';
+          return Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+            child: Semantics(
+              liveRegion: true,
+              child: Text(
+                totalResults == null
+                    ? loadedLabel
+                    : '${totalIsExact ? '' : 'Yaklaşık '}$totalResults sonuç • $loadedLabel',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ),
+          );
+        }
+        if (index == books.length + 1) {
           return Padding(
             padding: const EdgeInsets.all(16),
             child: isLoadingMore
@@ -376,7 +401,7 @@ class _BookSearchPageState extends State<BookSearchPage> {
                   ),
           );
         }
-        final book = books[index];
+        final book = books[index - 1];
         return Card(
           clipBehavior: Clip.antiAlias,
           child: InkWell(

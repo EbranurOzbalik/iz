@@ -35,13 +35,17 @@ void main() {
     await tester.pump(const Duration(milliseconds: 1));
   }
 
-  void returnBooks(List<Map<String, dynamic>> docs, {int? total}) {
+  void returnBooks(
+    List<Map<String, dynamic>> docs, {
+    Object? total,
+    bool? exact,
+  }) {
     pending
         .removeAt(0)
         .resolve(
           Response(
             requestOptions: requests.last,
-            data: {'docs': docs, 'numFound': total},
+            data: {'docs': docs, 'numFound': total, 'numFoundExact': exact},
           ),
         );
   }
@@ -70,6 +74,42 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 1));
   }
+
+  testWidgets('Result counts distinguish approximate and unavailable totals', (
+    tester,
+  ) async {
+    await openSearch(tester);
+    for (final total in [null, -1, 1, '20', 20]) {
+      await search(tester, 'Kitap');
+      expect(find.textContaining('kitap gösteriliyor'), findsNothing);
+      returnBooks(
+        [
+          {'title': 'Birinci kitap'},
+          {'title': 'İkinci kitap'},
+        ],
+        total: total,
+        exact: false,
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.text(
+          total == 20
+              ? 'Yaklaşık 20 sonuç • 2 kitap gösteriliyor'
+              : '2 kitap gösteriliyor',
+        ),
+        findsOneWidget,
+      );
+    }
+
+    await tester.tap(find.byTooltip('Aramayı temizle'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('kitap gösteriliyor'), findsNothing);
+    await search(tester, 'Bulunmayan');
+    returnBooks([], total: 0);
+    await tester.pumpAndSettle();
+    expect(find.text('Kitap bulunamadı'), findsOneWidget);
+    expect(find.textContaining('kitap gösteriliyor'), findsNothing);
+  });
 
   testWidgets(
     'Sorting restarts the submitted search and keeps its order across pages',
@@ -187,6 +227,7 @@ void main() {
         {'title': 'Dune'},
       ], total: 2);
       await tester.pumpAndSettle();
+      expect(find.text('2 sonuç • 1 kitap gösteriliyor'), findsOneWidget);
       await tester.enterText(find.byType(TextField), 'Yeni sorgu');
       await loadMore(tester);
       expect(find.text('Dune'), findsOneWidget);
@@ -199,14 +240,17 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Dune'), findsOneWidget);
       expect(find.text('Dune Messiah'), findsOneWidget);
+      expect(find.text('2 sonuç • 2 kitap gösteriliyor'), findsOneWidget);
       expect(find.text('Daha fazla göster'), findsNothing);
       await search(tester, 'Başka kitap');
+      expect(find.textContaining('kitap gösteriliyor'), findsNothing);
       expect(requests.last.queryParameters['offset'], 0);
       returnBooks([
         {'title': 'Başka kitap'},
       ], total: 1);
       await tester.pumpAndSettle();
       expect(find.text('Dune Messiah'), findsNothing);
+      expect(find.text('1 sonuç • 1 kitap gösteriliyor'), findsOneWidget);
     },
   );
 
@@ -226,6 +270,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Kuyucaklı Yusuf'), findsOneWidget);
       expect(find.text('Devamını tekrar dene'), findsOneWidget);
+      expect(find.text('2 sonuç • 1 kitap gösteriliyor'), findsOneWidget);
       await loadMore(tester, retry: true);
       expect(requests.last.queryParameters['author'], 'Sabahattin Ali');
       expect(requests.last.queryParameters.containsKey('q'), isFalse);
