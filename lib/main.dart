@@ -247,86 +247,121 @@ class _BookSearchPageState extends State<BookSearchPage> {
     return Scaffold(
       appBar: AppBar(title: const Text('İZ')),
       body: SafeArea(
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: SegmentedButton<_SearchMode>(
-                  segments: const [
-                    ButtonSegment(
-                      value: _SearchMode.book,
-                      label: Text('Kitap'),
-                    ),
-                    ButtonSegment(
-                      value: _SearchMode.author,
-                      label: Text('Yazar'),
-                    ),
-                  ],
-                  selected: {searchMode},
-                  onSelectionChanged: isBusy
-                      ? null
-                      : (selection) => clearSearch(mode: selection.single),
-                ),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
+        child: CustomScrollView(
+          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+          slivers: [
+            SliverToBoxAdapter(
+              child: Column(
                 children: [
-                  Expanded(
-                    child: TextField(
-                      controller: searchController,
-                      enabled: !isBusy,
-                      textInputAction: TextInputAction.search,
-                      decoration: InputDecoration(
-                        labelText: isAuthorSearch ? 'Yazar adı' : 'Kitap adı',
-                        hintText: isAuthorSearch
-                            ? 'Örn. Sabahattin Ali'
-                            : 'Örn. Suç ve Ceza',
-                        border: const OutlineInputBorder(),
-                        errorText: inputError,
-                        suffixIcon: searchController.text.isEmpty
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: SegmentedButton<_SearchMode>(
+                        segments: const [
+                          ButtonSegment(
+                            value: _SearchMode.book,
+                            label: Text('Kitap'),
+                          ),
+                          ButtonSegment(
+                            value: _SearchMode.author,
+                            label: Text('Yazar'),
+                          ),
+                        ],
+                        selected: {searchMode},
+                        onSelectionChanged: isBusy
                             ? null
-                            : IconButton(
-                                tooltip: 'Aramayı temizle',
-                                onPressed: isBusy ? null : clearSearch,
-                                icon: const Icon(Icons.clear),
-                              ),
+                            : (selection) =>
+                                  clearSearch(mode: selection.single),
                       ),
-                      onChanged: (_) {
-                        setState(() => inputError = null);
-                      },
-                      onSubmitted: (_) => searchBooks(),
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  ElevatedButton(
-                    onPressed: isBusy ? null : searchBooks,
-                    child: const Text('Kitap Ara'),
+                  Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        final input = TextField(
+                          controller: searchController,
+                          enabled: !isBusy,
+                          textInputAction: TextInputAction.search,
+                          decoration: InputDecoration(
+                            labelText: isAuthorSearch
+                                ? 'Yazar adı'
+                                : 'Kitap adı',
+                            hintText: isAuthorSearch
+                                ? 'Örn. Sabahattin Ali'
+                                : 'Örn. Suç ve Ceza',
+                            border: const OutlineInputBorder(),
+                            errorText: inputError,
+                            suffixIcon: searchController.text.isEmpty
+                                ? null
+                                : IconButton(
+                                    tooltip: 'Aramayı temizle',
+                                    onPressed: isBusy ? null : clearSearch,
+                                    icon: const Icon(Icons.clear),
+                                  ),
+                          ),
+                          onChanged: (_) {
+                            setState(() => inputError = null);
+                          },
+                          onSubmitted: (_) => searchBooks(),
+                        );
+                        final button = ElevatedButton(
+                          onPressed: isBusy ? null : searchBooks,
+                          child: const Text('Kitap Ara'),
+                        );
+                        final stackControls =
+                            constraints.maxWidth < 400 ||
+                            MediaQuery.textScalerOf(context).scale(16) > 20;
+                        return stackControls
+                            ? Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  input,
+                                  const SizedBox(height: 8),
+                                  button,
+                                ],
+                              )
+                            : Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Expanded(child: input),
+                                  const SizedBox(width: 8),
+                                  button,
+                                ],
+                              );
+                      },
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                    child: Tooltip(
+                      message: 'Sonuçları sırala',
+                      child: DropdownButton<_SearchSort>(
+                        value: searchSort,
+                        isExpanded: true,
+                        itemHeight: null,
+                        icon: const Icon(Icons.sort),
+                        items: [
+                          for (final sort in _SearchSort.values)
+                            DropdownMenuItem(
+                              value: sort,
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 8,
+                                ),
+                                child: Text(sort.label),
+                              ),
+                            ),
+                        ],
+                        onChanged: isBusy ? null : changeSort,
+                      ),
+                    ),
                   ),
                 ],
               ),
             ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-              child: Tooltip(
-                message: 'Sonuçları sırala',
-                child: DropdownButton<_SearchSort>(
-                  value: searchSort,
-                  isExpanded: true,
-                  icon: const Icon(Icons.sort),
-                  items: [
-                    for (final sort in _SearchSort.values)
-                      DropdownMenuItem(value: sort, child: Text(sort.label)),
-                  ],
-                  onChanged: isBusy ? null : changeSort,
-                ),
-              ),
-            ),
-            Expanded(child: buildResults()),
+            buildResults(),
           ],
         ),
       ),
@@ -335,43 +370,55 @@ class _BookSearchPageState extends State<BookSearchPage> {
 
   Widget buildResults() {
     if (isLoading) {
-      return const Center(child: CircularProgressIndicator());
+      return const SliverFillRemaining(
+        hasScrollBody: false,
+        child: Center(child: CircularProgressIndicator()),
+      );
     }
 
     if (errorMessage != null) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(errorMessage!, textAlign: TextAlign.center),
-              const SizedBox(height: 12),
-              ElevatedButton(
-                onPressed: () => searchBooks(repeatSearch: true),
-                child: const Text('Tekrar dene'),
-              ),
-            ],
+      return SliverFillRemaining(
+        hasScrollBody: false,
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(errorMessage!, textAlign: TextAlign.center),
+                const SizedBox(height: 12),
+                ElevatedButton(
+                  onPressed: () => searchBooks(repeatSearch: true),
+                  child: const Text('Tekrar dene'),
+                ),
+              ],
+            ),
           ),
         ),
       );
     }
 
     if (books.isEmpty) {
-      return Center(
-        child: Text(
-          hasSearched
-              ? 'Kitap bulunamadı'
-              : isAuthorSearch
-              ? 'Aramak için bir yazar adı yaz'
-              : 'Aramak için bir kitap adı yaz',
+      return SliverFillRemaining(
+        hasScrollBody: false,
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Text(
+              hasSearched
+                  ? 'Kitap bulunamadı'
+                  : isAuthorSearch
+                  ? 'Aramak için bir yazar adı yaz'
+                  : 'Aramak için bir kitap adı yaz',
+              textAlign: TextAlign.center,
+            ),
+          ),
         ),
       );
     }
 
-    return ListView.builder(
-      itemCount: 1 + books.length + (hasMore ? 1 : 0),
-      itemBuilder: (context, index) {
+    return SliverList(
+      delegate: SliverChildBuilderDelegate((context, index) {
         if (index == 0) {
           final loadedLabel = '${books.length} kitap gösteriliyor';
           return Padding(
@@ -480,7 +527,7 @@ class _BookSearchPageState extends State<BookSearchPage> {
             ),
           ),
         );
-      },
+      }, childCount: 1 + books.length + (hasMore ? 1 : 0)),
     );
   }
 }

@@ -29,7 +29,10 @@ void main() {
   }
 
   Future<void> search(WidgetTester tester, String query) async {
+    await tester.ensureVisible(find.byType(TextField));
     await tester.enterText(find.byType(TextField), query);
+    await tester.ensureVisible(find.text('Kitap Ara'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Kitap Ara'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 1));
@@ -57,10 +60,12 @@ void main() {
     await tester.scrollUntilVisible(
       button,
       250,
-      scrollable: find.descendant(
-        of: find.byType(ListView),
-        matching: find.byType(Scrollable),
-      ),
+      scrollable: find
+          .descendant(
+            of: find.byType(CustomScrollView),
+            matching: find.byType(Scrollable),
+          )
+          .first,
     );
     await tester.tap(button);
     await tester.pump();
@@ -68,6 +73,8 @@ void main() {
   }
 
   Future<void> selectSort(WidgetTester tester, String label) async {
+    await tester.ensureVisible(find.byTooltip('Sonuçları sırala'));
+    await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('Sonuçları sırala'));
     await tester.pumpAndSettle();
     await tester.tap(find.text(label).last);
