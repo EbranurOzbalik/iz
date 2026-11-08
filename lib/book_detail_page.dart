@@ -6,17 +6,23 @@ import 'book.dart';
 import 'book_cover.dart';
 import 'book_edition.dart';
 
+typedef SaveBook = Future<void> Function(Book book, int? pageCount);
+
 class BookDetailPage extends StatefulWidget {
   const BookDetailPage({
     super.key,
     required this.book,
     this.dio,
     this.onSearchAuthor,
+    this.onSaveBook,
+    this.isBookSaved,
   });
 
   final Book book;
   final Dio? dio;
   final ValueChanged<String>? onSearchAuthor;
+  final SaveBook? onSaveBook;
+  final bool Function(Book)? isBookSaved;
 
   @override
   State<BookDetailPage> createState() => _BookDetailPageState();
@@ -27,6 +33,23 @@ class _BookDetailPageState extends State<BookDetailPage> {
   late final Dio dio;
   late Future<BookEdition?> editionDetails;
   bool isCopying = false;
+  bool isSaving = false;
+
+  Future<void> saveBook(int? pageCount) async {
+    if (isSaving || widget.onSaveBook == null) return;
+    setState(() => isSaving = true);
+    var message = 'Kitap arşivine eklendi';
+    try {
+      await widget.onSaveBook!(widget.book, pageCount);
+    } catch (_) {
+      message = 'Arşive eklenemedi. Lütfen tekrar dene.';
+    }
+    if (!mounted) return;
+    setState(() => isSaving = false);
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
+  }
 
   @override
   void initState() {
@@ -153,6 +176,33 @@ class _BookDetailPageState extends State<BookDetailPage> {
                       ),
                   const SizedBox(height: 24),
                   const Divider(),
+                  if (widget.onSaveBook != null)
+                    FutureBuilder<BookEdition?>(
+                      future: editionDetails,
+                      builder: (context, snapshot) {
+                        final saved = widget.isBookSaved?.call(book) ?? false;
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          child: FilledButton.icon(
+                            onPressed: saved || isSaving
+                                ? null
+                                : () => saveBook(snapshot.data?.pageCount),
+                            icon: Icon(
+                              saved
+                                  ? Icons.bookmark_added
+                                  : Icons.bookmark_add_outlined,
+                            ),
+                            label: Text(
+                              saved
+                                  ? 'Arşivimde'
+                                  : isSaving
+                                  ? 'Kaydediliyor…'
+                                  : 'Arşivime ekle',
+                            ),
+                          ),
+                        );
+                      },
+                    ),
                   FutureBuilder<BookEdition?>(
                     future: editionDetails,
                     builder: (context, snapshot) {

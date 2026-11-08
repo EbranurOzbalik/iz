@@ -83,6 +83,105 @@ void main() {
   }
 
   testWidgets(
+    'Language changes refresh the submitted query and persist through paging, retry and sorting',
+    (tester) async {
+      await openSearch(tester);
+      await search(tester, 'Dune');
+      expect(requests.single.queryParameters['language'], 'tur');
+      expect(requests.single.queryParameters['lang'], 'tr');
+      returnBooks([
+        {
+          'title': 'Work title',
+          'editions': {
+            'docs': [
+              {'title': 'Türkçe baskı'},
+            ],
+          },
+        },
+      ], total: 1);
+      await tester.pumpAndSettle();
+      expect(find.text('Türkçe baskı'), findsOneWidget);
+      await tester.enterText(find.byType(TextField), 'Gönderilmemiş taslak');
+      await tester.ensureVisible(find.text('İngilizce'));
+      await tester.tap(find.text('İngilizce'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 1));
+      expect(requests.last.queryParameters['q'], 'Dune');
+      expect(requests.last.queryParameters['language'], 'eng');
+      expect(requests.last.queryParameters['lang'], 'en');
+      expect(requests.last.queryParameters['offset'], 0);
+      expect(find.text('Türkçe baskı'), findsNothing);
+      returnBooks([
+        {
+          'title': 'Work title',
+          'editions': {
+            'docs': [
+              {'title': 'English edition'},
+            ],
+          },
+        },
+      ], total: 2);
+      await tester.pumpAndSettle();
+      expect(find.text('English edition'), findsOneWidget);
+      await loadMore(tester);
+      expect(requests.last.queryParameters['language'], 'eng');
+      expect(requests.last.queryParameters['offset'], 1);
+      pending.removeAt(0).reject(DioException(requestOptions: requests.last));
+      await tester.pumpAndSettle();
+      await loadMore(tester, retry: true);
+      expect(requests.last.queryParameters['language'], 'eng');
+      expect(requests.last.queryParameters['offset'], 1);
+      returnBooks([
+        {'title': 'Another English book'},
+      ], total: 2);
+      await tester.pumpAndSettle();
+      await selectSort(tester, 'İlk yayın: en yeni');
+      expect(requests.last.queryParameters['language'], 'eng');
+      expect(requests.last.queryParameters['q'], 'Dune');
+      expect(requests.last.queryParameters['offset'], 0);
+      expect(requests.last.queryParameters['sort'], 'new');
+      returnBooks([], total: 0);
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('Author discovery inherits the selected book language', (
+    tester,
+  ) async {
+    await openSearch(tester);
+    await tester.tap(find.text('İngilizce'));
+    await tester.pumpAndSettle();
+    expect(requests, isEmpty);
+    await search(tester, 'Dune');
+    returnBooks([
+      {
+        'title': 'Dune',
+        'author_name': ['Frank Herbert'],
+      },
+    ], total: 1);
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Dune').last);
+    await tester.tap(find.text('Dune').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Frank Herbert kitapları'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 350));
+    expect(requests.last.queryParameters['author'], 'Frank Herbert');
+    expect(requests.last.queryParameters['language'], 'eng');
+    expect(requests.last.queryParameters['lang'], 'en');
+    returnBooks([], total: 0);
+    await tester.pumpAndSettle();
+    expect(
+      tester
+          .widget<ChoiceChip>(find.widgetWithText(ChoiceChip, 'İngilizce'))
+          .selected,
+      isTrue,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
     'Author discovery preserves the original search and book details',
     (tester) async {
       await openSearch(tester);

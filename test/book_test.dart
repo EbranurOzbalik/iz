@@ -2,6 +2,32 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:iz/book.dart';
 
 void main() {
+  test(
+    'Language-filtered search displays matched edition metadata without borrowing another cover',
+    () {
+      for (final cover in [null, 20]) {
+        final book = Book.fromJson({
+          'title': 'Original title',
+          'cover_i': 10,
+          'subtitle': 'Original subtitle',
+          'editions': {
+            'docs': [
+              {
+                'key': '/books/OL2M',
+                'title': 'Türkçe başlık',
+                'subtitle': 'Türkçe alt başlık',
+                'cover_i': cover,
+              },
+            ],
+          },
+        }, preferMatchedEdition: true);
+        expect(book.title, 'Türkçe başlık');
+        expect(book.subtitle, 'Türkçe alt başlık');
+        expect(book.coverId, cover);
+        expect(book.editionKey, '/books/OL2M');
+      }
+    },
+  );
   test('Search data includes metadata and a usable cover URL', () {
     final book = Book.fromJson({
       'title': 'Dune',

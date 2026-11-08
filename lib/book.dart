@@ -6,6 +6,7 @@ class Book {
   final int? coverId;
   final String? subtitle;
   final String? editionKey;
+  final String? workKey;
 
   Book({
     required this.title,
@@ -15,25 +16,38 @@ class Book {
     this.coverId,
     this.subtitle,
     this.editionKey,
+    this.workKey,
   });
 
-  factory Book.fromJson(Map<String, dynamic> json) {
+  factory Book.fromJson(
+    Map<String, dynamic> json, {
+    bool preferMatchedEdition = false,
+  }) {
     final editions = json['editions'];
     final editionDocs = editions is Map ? editions['docs'] : null;
     final matchedEdition = editionDocs is List && editionDocs.isNotEmpty
         ? editionDocs.first
         : null;
+    final displayEdition = preferMatchedEdition && matchedEdition is Map
+        ? matchedEdition
+        : null;
+    final editionTitle = _readSubtitle(displayEdition?['title']);
+    final cover = displayEdition == null
+        ? json['cover_i']
+        : displayEdition['cover_i'];
 
     return Book(
-      title: json['title'],
+      title: editionTitle ?? json['title'],
+      workKey: json['key'] is String ? json['key'] as String : null,
       authors: List<String>.from(json['author_name'] ?? []),
       firstPublishYear: json['first_publish_year'],
       editionCount: json['edition_count'],
-      coverId: json['cover_i'] is int ? json['cover_i'] as int : null,
+      coverId: cover is int ? cover : null,
       editionKey: matchedEdition is Map && matchedEdition['key'] is String
           ? matchedEdition['key'] as String
           : null,
       subtitle:
+          _readSubtitle(displayEdition?['subtitle']) ??
           _readSubtitle(json['subtitle']) ??
           (matchedEdition is Map
               ? _readSubtitle(matchedEdition['subtitle'])
