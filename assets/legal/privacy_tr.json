@@ -1,0 +1,38 @@
+{
+  "title": "Gizlilik politikası",
+  "updated": "23 Kasım 2026",
+  "sections": [
+    {
+      "title": "İZ ve geliştirici",
+      "text": "İZ, Ebranur Özbalık tarafından sunulan; kitap, film, dizi ve tiyatro deneyimlerini kişisel bir kültür günlüğünde saklamanı sağlayan bir uygulamadır. Gizlilik soruları için ozbalikebranur@gmail.com adresinden iletişim kurabilirsin. Uygulamada hesap, reklam, uygulama içi satın alma veya kullanıcı davranışlarını izleyen analiz SDK'sı bulunmaz."
+    },
+    {
+      "title": "Cihazındaki kayıtlar",
+      "text": "Arşivin, kişisel notların, puanların, okuma veya izleme ilerlemen, durumların ve takvim izlerin yalnızca uygulamanın cihazındaki yerel alanında saklanır. Bu günlük verileri geliştiriciye, İZ Katalog API'ye veya katalog sağlayıcılarına gönderilmez. İZ hesaplar arasında bulut eşitleme ya da kendisine ait bir yedekleme hizmeti sunmaz; Android yedekleme kuralları günlük verilerini yedekleme ve cihaz aktarımının dışında tutar."
+    },
+    {
+      "title": "Kitap aramaları ve kapaklar",
+      "text": "Kitap veya yazar aradığında arama metni, seçtiğin dil ve istenen kitap kimliği Open Library hizmetine gönderilir. Keşif rafları açıldığında katalog sorguları yapılır; kapaklar Open Library sunucularından yüklenir. Bu hizmetler bağlantı sırasında IP adresi, tarih-saat ve cihazın ağ isteği gibi standart teknik bilgileri kendi kurallarına göre işleyebilir. Kişisel notların, puanların ve arşivin bu isteklere eklenmez."
+    },
+    {
+      "title": "Film, dizi ve tiyatro kataloğu",
+      "text": "Çevrimiçi katalog aramasında yazdığın eser adı, eser türü, seçtiğin bilgi dili ve açtığın eserin katalog kimliği HTTPS üzerinden İZ Katalog API'ye gönderilir. Servis Cloudflare altyapısında çalışır ve yalnızca herkese açık katalog verilerini saklar; kişisel günlüğünü veya arama geçmişine bağlı bir kullanıcı profili saklamaz. Katalog verileri ve görseller Wikidata, Wikimedia Commons, TVmaze ve Biletsa gibi kaynaklardan gelebilir. Görsel yüklenirken veya kaynak bağlantısını açtığında ilgili sağlayıcı standart ağ bilgilerini kendi politikalarına göre işleyebilir."
+    },
+    {
+      "title": "Bildirimler ve cihaz izinleri",
+      "text": "Hatırlatıcı oluşturmayı seçersen bildirim zamanı ve içeriği cihazında yerel olarak planlanır; bir bildirim sunucusuna gönderilmez. İZ konum, kamera, mikrofon, kişiler veya reklam kimliği izni istemez. İnternet erişimi yalnızca katalog aramaları, kapaklar, kaynak bağlantıları ve destek e-postası gibi kullanıcı tarafından görülen özellikler için kullanılır."
+    },
+    {
+      "title": "Saklama, silme ve güvenlik",
+      "text": "Yerel kayıtların sen silene, uygulama verilerini temizleyene veya uygulamayı kaldırana kadar cihazında kalır. Bir eseri kendi sayfasından silebilir; Yardım ve gizlilik ekranındaki “Tüm kayıtlarımı sil” seçeneğiyle bütün günlüğü kaldırabilirsin. Hesap bulunmadığı için ayrıca hesap silme talebi gerekmez. Ağ bağlantıları HTTPS kullanır. Katalog sağlayıcılarının standart teknik günlükleri kendi saklama ve güvenlik politikalarına tabidir."
+    },
+    {
+      "title": "Destek ve dış bağlantılar",
+      "text": "Destek düğmesi cihazındaki e-posta uygulamasını açar; İZ arşivini, notlarını veya cihaz kayıtlarını iletiye otomatik olarak eklemez. Göndermeyi seçtiğin e-posta adresi ve ileti içeriği yalnızca destek talebini yanıtlamak amacıyla kullanılır. Uygulamadaki dış bağlantıları açtığında ilgili sitenin gizlilik ve kullanım koşulları geçerlidir."
+    },
+    {
+      "title": "Değişiklikler",
+      "text": "Uygulamanın veri kullanımı değişirse bu politika ve Google Play Veri güvenliği beyanı güncellenir. Önemli değişiklikler yeni sürüm notlarında veya uygulama içinde duyurulabilir. Güncel tarih bu metnin başında yer alır."
+    }
+  ]
+}

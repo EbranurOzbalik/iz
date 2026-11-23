@@ -1,0 +1,6 @@
+# Copy to key.properties and fill in your existing upload keystore details.
+# storeFile can be an absolute path or a path relative to android/.
+storeFile=
+storePassword=
+keyAlias=
+keyPassword=
