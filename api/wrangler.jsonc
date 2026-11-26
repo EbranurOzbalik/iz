@@ -1,0 +1,20 @@
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "iz-catalog-api",
+	"main": "src/index.js",
+	"compatibility_date": "2026-11-14",
+	"workers_dev": true,
+	"triggers": {
+		"crons": ["0 */6 * * *"]
+	},
+	"observability": {
+		"enabled": true
+	},
+	"d1_databases": [
+		{
+			"binding": "CATALOG_DB",
+			"database_name": "iz-catalog-db",
+			"database_id": "a81f0ee5-c955-4bbb-ac84-9197cf1bd3f3"
+		}
+	]
+}
