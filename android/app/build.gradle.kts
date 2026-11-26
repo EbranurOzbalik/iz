@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("kotlin-android")
@@ -5,12 +7,24 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+val uploadPropertiesFile = rootProject.file("key.properties")
+val uploadProperties = Properties()
+if (uploadPropertiesFile.exists()) {
+    uploadPropertiesFile.inputStream().use { uploadProperties.load(it) }
+    listOf("storeFile", "storePassword", "keyAlias", "keyPassword").forEach {
+        require(!uploadProperties.getProperty(it).isNullOrBlank()) {
+            "android/key.properties is missing $it"
+        }
+    }
+}
+
 android {
-    namespace = "com.example.iz"
+    namespace = "com.ebranurozbalik.iz"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
+        isCoreLibraryDesugaringEnabled = true
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
@@ -20,22 +34,43 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.example.iz"
+        applicationId = "com.ebranurozbalik.iz"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion
-        targetSdk = flutter.targetSdkVersion
+        targetSdk = 36
         versionCode = flutter.versionCode
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        if (uploadPropertiesFile.exists()) {
+            create("upload") {
+                storeFile = rootProject.file(uploadProperties.getProperty("storeFile"))
+                storePassword = uploadProperties.getProperty("storePassword")
+                keyAlias = uploadProperties.getProperty("keyAlias")
+                keyPassword = uploadProperties.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            // Without an upload key this creates an unsigned validation build.
+            // tool/build_play_release.py requires real signing before distribution.
+            signingConfig = signingConfigs.findByName("upload")
         }
+    }
+}
+
+dependencies {
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
+}
+
+androidComponents {
+    onVariants(selector().withBuildType("debug")) { variant ->
+        // Preserve the existing development installation and its journal.
+        variant.applicationId.set("com.example.iz")
     }
 }
 

@@ -144,6 +144,8 @@ class JournalStore extends ChangeNotifier {
     _activities.where((e) => e.entryId != id).toList(),
   );
 
+  Future<void> clear() => _commit([], []);
+
   Future<void> _commit(
     List<JournalEntry> entries,
     List<JournalActivity> activities,

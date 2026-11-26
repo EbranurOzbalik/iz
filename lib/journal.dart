@@ -38,6 +38,10 @@ class JournalEntry {
     this.total,
     this.rating = 0,
     this.note = '',
+    this.season,
+    this.venue = '',
+    this.eventDate,
+    this.reminderAt,
     this.book,
     this.movie,
   });
@@ -47,10 +51,15 @@ class JournalEntry {
   final JournalStatus status;
   final int progress, rating;
   final int? total;
+  final int? season;
+  final String venue;
+  final DateTime? eventDate, reminderAt;
   final Book? book;
   final Movie? movie;
 
   static String movieId(Movie movie) => 'movie:tmdb:${movie.id}';
+  static String catalogId(Movie item, MediaType type) =>
+      'catalog:${type.name}:${item.id}';
   factory JournalEntry.fromMovie(Movie movie) => JournalEntry(
     id: movieId(movie),
     title: movie.title,
@@ -58,6 +67,20 @@ class JournalEntry {
     type: MediaType.film,
     movie: movie,
   );
+
+  factory JournalEntry.fromCatalog(Movie item, MediaType type) {
+    if (type == MediaType.film) return JournalEntry.fromMovie(item);
+    if (type == MediaType.book) {
+      throw const FormatException('Kitap katalog kaydı film modeli kullanamaz');
+    }
+    return JournalEntry(
+      id: catalogId(item, type),
+      title: item.title,
+      creator: item.directors.join(', '),
+      type: type,
+      movie: item,
+    );
+  }
 
   static String bookId(Book book) =>
       'book:${book.workKey ?? book.editionKey ?? '${book.title.trim().toLowerCase()}|${book.authors.join(',').trim().toLowerCase()}'}';
@@ -91,6 +114,12 @@ class JournalEntry {
     required int? total,
     required int rating,
     required String note,
+    int? season,
+    String? venue,
+    DateTime? eventDate,
+    DateTime? reminderAt,
+    bool clearEventDate = false,
+    bool clearReminder = false,
   }) => JournalEntry(
     id: id,
     title: title,
@@ -103,6 +132,10 @@ class JournalEntry {
     total: total,
     rating: rating,
     note: note.trim(),
+    season: season ?? this.season,
+    venue: venue?.trim() ?? this.venue,
+    eventDate: clearEventDate ? null : eventDate ?? this.eventDate,
+    reminderAt: clearReminder ? null : reminderAt ?? this.reminderAt,
   );
 
   Map<String, Object?> toJson() => {
@@ -115,6 +148,10 @@ class JournalEntry {
     'total': total,
     'rating': rating,
     'note': note,
+    if (season != null) 'season': season,
+    if (venue.isNotEmpty) 'venue': venue,
+    if (eventDate != null) 'eventDate': eventDate!.toIso8601String(),
+    if (reminderAt != null) 'reminderAt': reminderAt!.toIso8601String(),
     if (movie != null) 'movie': movie!.toJson(),
     if (book case final source?)
       'book': {
@@ -144,6 +181,10 @@ class JournalEntry {
       total: json['total'] as int?,
       rating: json['rating'] as int,
       note: json['note'] as String,
+      season: json['season'] as int?,
+      venue: json['venue'] as String? ?? '',
+      eventDate: _date(json['eventDate']),
+      reminderAt: _date(json['reminderAt']),
       book: json['book'] == null
           ? null
           : Book.fromJson(Map<String, dynamic>.from(json['book'] as Map)),
@@ -156,17 +197,28 @@ class JournalEntry {
   }
 
   void validate() {
-    if ((movie != null && (type != MediaType.film || id != movieId(movie!))) ||
+    if ((movie != null &&
+            (type == MediaType.book ||
+                (type == MediaType.film
+                    ? id != movieId(movie!) && id != catalogId(movie!, type)
+                    : id != catalogId(movie!, type)))) ||
         id.isEmpty ||
         title.trim().isEmpty ||
         progress < 0 ||
         (total != null && (total! <= 0 || progress > total!)) ||
         rating < 0 ||
         rating > 5 ||
-        note.length > 2000) {
+        note.length > 2000 ||
+        (season != null && (type != MediaType.series || season! <= 0)) ||
+        venue.length > 200 ||
+        (venue.isNotEmpty && type != MediaType.theatre) ||
+        (eventDate != null && type != MediaType.theatre)) {
       throw const FormatException('Geçersiz günlük kaydı');
     }
   }
+
+  static DateTime? _date(Object? value) =>
+      value is String ? DateTime.tryParse(value)?.toLocal() : null;
 }
 
 class JournalActivity {

@@ -18,6 +18,7 @@ import 'movie_catalog.dart';
 import 'movie_poster.dart';
 import 'movie_widgets.dart';
 import 'tmdb_attribution.dart';
+import 'reminder_service.dart';
 
 class AddJournalEntryPage extends StatefulWidget {
   const AddJournalEntryPage({
@@ -51,7 +52,7 @@ class _AddJournalEntryPageState extends State<AddJournalEntryPage> {
       );
   final editionToken = CancelToken();
   late final MovieCatalog movieCatalog =
-      widget.movies ?? TmdbMovieCatalog(dio: dio);
+      widget.movies ?? IzMovieCatalog(dio: dio);
   MovieLocale movieLocale = MovieLocale.turkish;
   CancelToken? movieToken;
   Movie? selectedMovie;
@@ -59,6 +60,14 @@ class _AddJournalEntryPageState extends State<AddJournalEntryPage> {
   String? movieError;
   Book? selectedBook;
   bool saving = false;
+
+  bool get usesCatalog => type != MediaType.book;
+  CatalogKind get catalogKind => switch (type) {
+    MediaType.film => CatalogKind.film,
+    MediaType.series => CatalogKind.series,
+    MediaType.theatre => CatalogKind.theatre,
+    MediaType.book => throw StateError('Kitap kültür kataloğunu kullanmaz'),
+  };
   @override
   void dispose() {
     editionToken.cancel();
@@ -103,7 +112,12 @@ class _AddJournalEntryPageState extends State<AddJournalEntryPage> {
     });
     if (movie.detailsLoaded) return;
     try {
-      final detailed = await movieCatalog.details(movie.id, movieLocale, token);
+      final detailed = await movieCatalog.details(
+        movie.id,
+        movieLocale,
+        token,
+        kind: catalogKind,
+      );
       if (!mounted || token.isCancelled) return;
       setState(() {
         selectedMovie = detailed;
@@ -142,7 +156,7 @@ class _AddJournalEntryPageState extends State<AddJournalEntryPage> {
     final entry = book != null
         ? JournalEntry.fromBook(book)
         : movie != null
-        ? JournalEntry.fromMovie(movie)
+        ? JournalEntry.fromCatalog(movie, type)
         : JournalEntry(
             id: 'manual:${type.name}:${jsonEncode([title.text.trim().toLowerCase(), creator.text.trim().toLowerCase()])}',
             title: title.text.trim(),
@@ -227,9 +241,10 @@ class _AddJournalEntryPageState extends State<AddJournalEntryPage> {
                     ),
                     const SizedBox(height: 16),
                   ],
-                  if (type == MediaType.film) ...[
+                  if (usesCatalog && movieCatalog.isConfigured) ...[
                     MovieLanguageSelector(
                       value: movieLocale,
+                      catalogLabel: type.label,
                       onChanged: saving
                           ? null
                           : (locale) => setState(() {
@@ -245,13 +260,7 @@ class _AddJournalEntryPageState extends State<AddJournalEntryPage> {
                     enabled: !saving,
                     maxLength: 200,
                     textCapitalization: TextCapitalization.sentences,
-                    decoration: InputDecoration(
-                      labelText: type == MediaType.book
-                          ? 'Kitap adı'
-                          : type == MediaType.film
-                          ? 'Film adı'
-                          : 'Eser adı',
-                    ),
+                    decoration: InputDecoration(labelText: '${type.label} adı'),
                     onChanged: (_) => setState(clearSelection),
                     validator: (value) => value == null || value.trim().isEmpty
                         ? 'Bir eser adı yaz'
@@ -304,7 +313,7 @@ class _AddJournalEntryPageState extends State<AddJournalEntryPage> {
                         language: bookLanguage,
                         onSelected: selectBook,
                       ),
-                  if (type == MediaType.film && !saving) ...[
+                  if (usesCatalog && !saving) ...[
                     if (selectedMovie case final movie?)
                       Card(
                         child: Padding(
@@ -323,7 +332,7 @@ class _AddJournalEntryPageState extends State<AddJournalEntryPage> {
                                           CrossAxisAlignment.start,
                                       children: [
                                         Text(
-                                          'Film seçildi',
+                                          '${type.label} seçildi',
                                           style: Theme.of(
                                             context,
                                           ).textTheme.labelMedium,
@@ -350,7 +359,7 @@ class _AddJournalEntryPageState extends State<AddJournalEntryPage> {
                                   child: const Text('Bilgileri tekrar yükle'),
                                 ),
                               ],
-                              const TmdbAttribution(),
+                              const MovieAttribution(),
                             ],
                           ),
                         ),
@@ -360,6 +369,7 @@ class _AddJournalEntryPageState extends State<AddJournalEntryPage> {
                         query: title.text,
                         locale: movieLocale,
                         catalog: movieCatalog,
+                        kind: catalogKind,
                         onSelected: selectMovie,
                       ),
                     const SizedBox(height: 16),
@@ -371,11 +381,14 @@ class _AddJournalEntryPageState extends State<AddJournalEntryPage> {
                     maxLength: 200,
                     textCapitalization: TextCapitalization.words,
                     decoration: InputDecoration(
-                      labelText: type == MediaType.book
-                          ? 'Yazar (isteğe bağlı)'
-                          : type == MediaType.film
-                          ? 'Yönetmen (isteğe bağlı)'
-                          : 'Yazar, yönetmen veya topluluk (isteğe bağlı)',
+                      labelText: switch (type) {
+                        MediaType.book => 'Yazar (isteğe bağlı)',
+                        MediaType.film => 'Yönetmen (isteğe bağlı)',
+                        MediaType.series =>
+                          'Yönetmen veya senarist (isteğe bağlı)',
+                        MediaType.theatre =>
+                          'Yazar, yönetmen veya topluluk (isteğe bağlı)',
+                      },
                     ),
                   ),
                   const SizedBox(height: 24),
@@ -399,9 +412,11 @@ class JournalEntryPage extends StatefulWidget {
     super.key,
     required this.store,
     required this.entryId,
+    this.reminders,
   });
   final JournalStore store;
   final String entryId;
+  final ReminderService? reminders;
   @override
   State<JournalEntryPage> createState() => _JournalEntryPageState();
 }
@@ -412,6 +427,12 @@ class _JournalEntryPageState extends State<JournalEntryPage> {
   late final note = TextEditingController(text: entry.note);
   late final progress = TextEditingController(text: '${entry.progress}');
   late final total = TextEditingController(text: entry.total?.toString() ?? '');
+  late final season = TextEditingController(
+    text: entry.season?.toString() ?? '',
+  );
+  late final venue = TextEditingController(text: entry.venue);
+  late DateTime? eventDate = entry.eventDate;
+  late DateTime? reminderAt = entry.reminderAt;
   late JournalStatus status = entry.status;
   late int rating = entry.rating;
   bool saving = false;
@@ -421,6 +442,8 @@ class _JournalEntryPageState extends State<JournalEntryPage> {
     note.dispose();
     progress.dispose();
     total.dispose();
+    season.dispose();
+    venue.dispose();
     super.dispose();
   }
 
@@ -445,9 +468,35 @@ class _JournalEntryPageState extends State<JournalEntryPage> {
           total: limit,
           rating: rating,
           note: note.text,
+          season: int.tryParse(season.text.trim()),
+          venue: venue.text,
+          eventDate: eventDate,
+          reminderAt: reminderAt,
+          clearEventDate: eventDate == null,
+          clearReminder: reminderAt == null,
         ),
       );
-      if (mounted) Navigator.pop(context);
+      final updated = widget.store.find(entry.id)!;
+      var reminderReady = true;
+      if (widget.reminders case final reminders?) {
+        if (updated.reminderAt == null) {
+          await reminders.cancel(updated.id);
+        } else {
+          reminderReady = await reminders.schedule(updated);
+        }
+      }
+      if (!mounted) return;
+      if (!reminderReady) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Kayıt tamamlandı; bildirim izni verilmediği için hatırlatıcı kurulamadı.',
+            ),
+          ),
+        );
+      } else {
+        Navigator.pop(context);
+      }
     } catch (_) {
       showSaveError();
     } finally {
@@ -491,12 +540,43 @@ class _JournalEntryPageState extends State<JournalEntryPage> {
     setState(() => saving = true);
     try {
       await widget.store.remove(entry.id);
+      await widget.reminders?.cancel(entry.id);
       if (mounted) Navigator.pop(context);
     } catch (_) {
       showSaveError();
     } finally {
       if (mounted) setState(() => saving = false);
     }
+  }
+
+  String dateLabel(DateTime value, {bool time = false}) {
+    final localizations = MaterialLocalizations.of(context);
+    final date = localizations.formatMediumDate(value);
+    return time
+        ? '$date · ${localizations.formatTimeOfDay(TimeOfDay.fromDateTime(value))}'
+        : date;
+  }
+
+  Future<DateTime?> pickDateTime(
+    DateTime? initial, {
+    bool withTime = false,
+  }) async {
+    final now = DateTime.now();
+    final date = await showDatePicker(
+      context: context,
+      initialDate: initial ?? now,
+      firstDate: withTime ? dayDate(now) : DateTime(now.year - 10),
+      lastDate: DateTime(now.year + 10),
+    );
+    if (date == null || !mounted || !withTime) return date;
+    final time = await showTimePicker(
+      context: context,
+      initialTime: initial == null
+          ? TimeOfDay.fromDateTime(now.add(const Duration(hours: 1)))
+          : TimeOfDay.fromDateTime(initial),
+    );
+    if (time == null) return null;
+    return DateTime(date.year, date.month, date.day, time.hour, time.minute);
   }
 
   @override
@@ -554,7 +634,7 @@ class _JournalEntryPageState extends State<JournalEntryPage> {
                           MaterialPageRoute<void>(
                             builder: (_) => Scaffold(
                               appBar: AppBar(
-                                title: const Text('Film bilgileri'),
+                                title: Text('${entry.type.label} bilgileri'),
                               ),
                               body: SafeArea(
                                 child: SingleChildScrollView(
@@ -566,7 +646,7 @@ class _JournalEntryPageState extends State<JournalEntryPage> {
                           ),
                         ),
                         icon: const Icon(Icons.info_outline),
-                        label: const Text('Film bilgileri'),
+                        label: Text('${entry.type.label} bilgileri'),
                       ),
                     ],
                     if (entry.book case final book?)
@@ -663,6 +743,54 @@ class _JournalEntryPageState extends State<JournalEntryPage> {
                             ? null
                             : '0’dan büyük bir sayı yaz',
                       ),
+                      if (entry.type == MediaType.series) ...[
+                        const SizedBox(height: 16),
+                        TextFormField(
+                          controller: season,
+                          enabled: !saving,
+                          keyboardType: TextInputType.number,
+                          inputFormatters: [
+                            FilteringTextInputFormatter.digitsOnly,
+                          ],
+                          decoration: const InputDecoration(
+                            labelText: 'Bulunduğun sezon (isteğe bağlı)',
+                          ),
+                          validator: (value) =>
+                              value == null ||
+                                  value.isEmpty ||
+                                  (int.tryParse(value) ?? 0) > 0
+                              ? null
+                              : '0’dan büyük bir sayı yaz',
+                        ),
+                      ],
+                    ],
+                    if (entry.type == MediaType.theatre) ...[
+                      const SizedBox(height: 16),
+                      TextFormField(
+                        controller: venue,
+                        enabled: !saving,
+                        maxLength: 200,
+                        textCapitalization: TextCapitalization.words,
+                        decoration: const InputDecoration(
+                          labelText: 'Sahne veya mekân (isteğe bağlı)',
+                        ),
+                      ),
+                      _DateTile(
+                        icon: Icons.theater_comedy_outlined,
+                        title: 'Gösterim tarihi',
+                        value: eventDate == null ? null : dateLabel(eventDate!),
+                        onTap: saving
+                            ? null
+                            : () async {
+                                final value = await pickDateTime(eventDate);
+                                if (value != null && mounted) {
+                                  setState(() => eventDate = value);
+                                }
+                              },
+                        onClear: eventDate == null || saving
+                            ? null
+                            : () => setState(() => eventDate = null),
+                      ),
                     ],
                     const SizedBox(height: 16),
                     DropdownButtonFormField<int>(
@@ -697,6 +825,28 @@ class _JournalEntryPageState extends State<JournalEntryPage> {
                       ),
                     ),
                     const SizedBox(height: 16),
+                    _DateTile(
+                      icon: Icons.notifications_active_outlined,
+                      title: 'Bana hatırlat',
+                      value: reminderAt == null
+                          ? null
+                          : dateLabel(reminderAt!, time: true),
+                      onTap: saving
+                          ? null
+                          : () async {
+                              final value = await pickDateTime(
+                                reminderAt,
+                                withTime: true,
+                              );
+                              if (value != null && mounted) {
+                                setState(() => reminderAt = value);
+                              }
+                            },
+                      onClear: reminderAt == null || saving
+                          ? null
+                          : () => setState(() => reminderAt = null),
+                    ),
+                    const SizedBox(height: 16),
                     FilledButton.icon(
                       onPressed: saving ? null : save,
                       icon: const Icon(Icons.check),
@@ -713,4 +863,37 @@ class _JournalEntryPageState extends State<JournalEntryPage> {
       ),
     );
   }
+}
+
+class _DateTile extends StatelessWidget {
+  const _DateTile({
+    required this.icon,
+    required this.title,
+    required this.value,
+    required this.onTap,
+    required this.onClear,
+  });
+
+  final IconData icon;
+  final String title;
+  final String? value;
+  final VoidCallback? onTap, onClear;
+
+  @override
+  Widget build(BuildContext context) => Card(
+    margin: const EdgeInsets.only(top: 16),
+    child: ListTile(
+      leading: Icon(icon),
+      title: Text(title),
+      subtitle: Text(value ?? 'Tarih seçilmedi'),
+      onTap: onTap,
+      trailing: value == null
+          ? const Icon(Icons.chevron_right)
+          : IconButton(
+              tooltip: 'Tarihi kaldır',
+              onPressed: onClear,
+              icon: const Icon(Icons.close),
+            ),
+    ),
+  );
 }

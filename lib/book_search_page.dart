@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
 import 'book.dart';
@@ -44,6 +46,7 @@ class _BookSearchPageState extends State<BookSearchPage> {
   static const pageSize = 5;
   final TextEditingController searchController = TextEditingController();
   final CancelToken cancelToken = CancelToken();
+  Timer? searchDebounce;
   late final Dio dio;
 
   bool isLoading = false;
@@ -89,6 +92,7 @@ class _BookSearchPageState extends State<BookSearchPage> {
 
   @override
   void dispose() {
+    searchDebounce?.cancel();
     cancelToken.cancel();
     if (widget.dio == null) {
       dio.close(force: true);
@@ -100,7 +104,9 @@ class _BookSearchPageState extends State<BookSearchPage> {
   Future<void> searchBooks({
     bool loadMore = false,
     bool repeatSearch = false,
+    bool keepFocus = false,
   }) async {
+    searchDebounce?.cancel();
     if (isBusy || (loadMore && !hasMore)) return;
 
     final useActiveSearch = loadMore || repeatSearch;
@@ -114,7 +120,7 @@ class _BookSearchPageState extends State<BookSearchPage> {
       return;
     }
 
-    FocusScope.of(context).unfocus();
+    if (!keepFocus) FocusScope.of(context).unfocus();
     setState(() {
       loadMoreError = null;
       if (loadMore) {
@@ -194,18 +200,21 @@ class _BookSearchPageState extends State<BookSearchPage> {
   }
 
   void changeSort(_SearchSort? sort) {
+    searchDebounce?.cancel();
     if (isBusy || sort == null || sort == searchSort) return;
     setState(() => searchSort = sort);
     if (hasSearched) searchBooks(repeatSearch: true);
   }
 
   void changeLanguage(BookLanguage language) {
+    searchDebounce?.cancel();
     if (isBusy || language == searchLanguage) return;
     setState(() => searchLanguage = language);
     if (hasSearched) searchBooks(repeatSearch: true);
   }
 
   void clearSearch({_SearchMode? mode}) {
+    searchDebounce?.cancel();
     if (isBusy) return;
     searchController.clear();
     setState(() {
@@ -220,6 +229,15 @@ class _BookSearchPageState extends State<BookSearchPage> {
       totalResults = null;
       totalIsExact = true;
       activeQuery = '';
+    });
+  }
+
+  void queryChanged(String value) {
+    searchDebounce?.cancel();
+    setState(() => inputError = null);
+    if (value.trim().length < 2) return;
+    searchDebounce = Timer(const Duration(milliseconds: 450), () {
+      if (mounted) searchBooks(keepFocus: true);
     });
   }
 
@@ -314,9 +332,7 @@ class _BookSearchPageState extends State<BookSearchPage> {
                                     icon: const Icon(Icons.clear),
                                   ),
                           ),
-                          onChanged: (_) {
-                            setState(() => inputError = null);
-                          },
+                          onChanged: queryChanged,
                           onSubmitted: (_) => searchBooks(),
                         );
                         final button = ElevatedButton(
@@ -355,6 +371,7 @@ class _BookSearchPageState extends State<BookSearchPage> {
                         isExpanded: true,
                         itemHeight: null,
                         icon: const Icon(Icons.sort),
+                        onTap: () => searchDebounce?.cancel(),
                         items: [
                           for (final sort in _SearchSort.values)
                             DropdownMenuItem(

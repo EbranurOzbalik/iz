@@ -4,14 +4,20 @@ import 'book.dart';
 import 'book_detail_page.dart';
 import 'book_discovery.dart';
 import 'book_discovery_section.dart';
+import 'book_language.dart';
 import 'book_search_page.dart';
 import 'journal.dart';
 import 'journal_calendar.dart';
 import 'journal_cover.dart';
 import 'journal_entry_page.dart';
 import 'journal_store.dart';
+import 'journal_statistics_page.dart';
 import 'discover_page.dart';
 import 'movie_catalog.dart';
+import 'movie.dart';
+import 'app_info_page.dart';
+import 'catalog_discovery_section.dart';
+import 'reminder_service.dart';
 
 class JournalShell extends StatefulWidget {
   const JournalShell({
@@ -19,10 +25,12 @@ class JournalShell extends StatefulWidget {
     required this.store,
     this.discovery,
     this.movies,
+    this.reminders,
   });
   final JournalStore store;
   final BookDiscoverySource? discovery;
   final MovieCatalog? movies;
+  final ReminderService? reminders;
   @override
   State<JournalShell> createState() => _JournalShellState();
 }
@@ -32,6 +40,8 @@ class _JournalShellState extends State<JournalShell>
   int tab = 0;
   MediaType? category;
   JournalStatus? archiveStatus;
+  BookLanguage recommendationLanguage = BookLanguage.turkish;
+  late final MovieCatalog catalog = widget.movies ?? IzMovieCatalog();
 
   @override
   void initState() {
@@ -43,6 +53,7 @@ class _JournalShellState extends State<JournalShell>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    if (widget.movies == null) (catalog as IzMovieCatalog).dispose();
     super.dispose();
   }
 
@@ -58,7 +69,7 @@ class _JournalShellState extends State<JournalShell>
         builder: (_) => AddJournalEntryPage(
           store: widget.store,
           initialType: category ?? MediaType.film,
-          movies: widget.movies,
+          movies: catalog,
         ),
       ),
     );
@@ -68,7 +79,11 @@ class _JournalShellState extends State<JournalShell>
   void openEntry(String id) => Navigator.push(
     context,
     MaterialPageRoute<void>(
-      builder: (_) => JournalEntryPage(store: widget.store, entryId: id),
+      builder: (_) => JournalEntryPage(
+        store: widget.store,
+        entryId: id,
+        reminders: widget.reminders,
+      ),
     ),
   );
 
@@ -109,21 +124,29 @@ class _JournalShellState extends State<JournalShell>
           avatar: Icon(mediaIcon(type), size: 16),
           label: Text(type.label),
           selected: category == type,
+          showCheckmark: false,
           onSelected: (_) => setState(() => category = type),
         ),
     ],
   );
 
   Widget pageBody(List<Widget> children, {required String key}) =>
-      SingleChildScrollView(
-        key: PageStorageKey(key),
-        padding: const EdgeInsets.fromLTRB(24, 8, 24, 32),
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 680),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: children,
+      LayoutBuilder(
+        builder: (context, constraints) => SingleChildScrollView(
+          key: PageStorageKey(key),
+          padding: EdgeInsets.fromLTRB(
+            constraints.maxWidth < 420 ? 16 : 24,
+            8,
+            constraints.maxWidth < 420 ? 16 : 24,
+            32,
+          ),
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 680),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: children,
+              ),
             ),
           ),
         ),
@@ -149,6 +172,21 @@ class _JournalShellState extends State<JournalShell>
       ),
       const SizedBox(height: 24),
       categories(),
+      const SizedBox(height: 14),
+      Text('Öneri dili', style: Theme.of(context).textTheme.labelLarge),
+      const SizedBox(height: 6),
+      Wrap(
+        spacing: 8,
+        children: [
+          for (final language in BookLanguage.values)
+            ChoiceChip(
+              label: Text(language.label),
+              selected: recommendationLanguage == language,
+              onSelected: (_) =>
+                  setState(() => recommendationLanguage = language),
+            ),
+        ],
+      ),
       const SizedBox(height: 24),
       if (active.isNotEmpty) ...[
         Text(
@@ -210,15 +248,32 @@ class _JournalShellState extends State<JournalShell>
         const SizedBox(height: 24),
       ],
       Visibility(
-        key: const ValueKey('discovery-shelves'),
+        key: ValueKey('discovery-shelves-${recommendationLanguage.name}'),
         visible: category == null || category == MediaType.book,
         maintainState: true,
         child: BookDiscoverySection(
+          key: ValueKey('book-discovery-${recommendationLanguage.name}'),
           source: widget.discovery,
+          language: recommendationLanguage,
           savedBookIds: widget.store.entries.map((e) => e.id).toSet(),
           onOpenBook: openBook,
         ),
       ),
+      for (final type in [MediaType.film, MediaType.series, MediaType.theatre])
+        if ((category == null || category == type) && catalog.isConfigured)
+          CatalogDiscoverySection(
+            key: ValueKey(
+              'catalog-shelf-${type.name}-${recommendationLanguage.name}',
+            ),
+            catalog: catalog,
+            type: type,
+            locale: recommendationLanguage == BookLanguage.english
+                ? MovieLocale.english
+                : MovieLocale.turkish,
+            savedIds: widget.store.entries.map((entry) => entry.id).toSet(),
+            onSave: (item, type) =>
+                widget.store.save(JournalEntry.fromCatalog(item, type)),
+          ),
       if (entries.isEmpty) ...[
         Container(
           padding: const EdgeInsets.all(24),
@@ -414,6 +469,9 @@ class _JournalShellState extends State<JournalShell>
   Widget build(BuildContext context) => AnimatedBuilder(
     animation: widget.store,
     builder: (context, _) {
+      // Android can emit a zero-size frame before its surface is ready.
+      // Wait for real dimensions before laying out the archive and calendar.
+      if (MediaQuery.sizeOf(context).isEmpty) return const SizedBox.shrink();
       final store = widget.store;
       if (store.loadError != null || !store.loaded) {
         return Scaffold(
@@ -449,16 +507,41 @@ class _JournalShellState extends State<JournalShell>
                       'iz',
                       style: Theme.of(context).textTheme.headlineLarge,
                     ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Text(
+                    if (MediaQuery.sizeOf(context).width >= 520) ...[
+                      const SizedBox(width: 16),
+                      Text(
                         'hikâyeler geçer, izleri kalır.',
-                        style: Theme.of(context).textTheme.bodySmall,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
                       ),
-                    ),
+                    ],
                   ],
                 ),
                 actions: [
+                  IconButton(
+                    tooltip: 'İstatistiklerim',
+                    onPressed: () => Navigator.push(
+                      context,
+                      MaterialPageRoute<void>(
+                        builder: (_) => JournalStatisticsPage(
+                          entries: store.entries,
+                          activities: store.activities,
+                        ),
+                      ),
+                    ),
+                    icon: const Icon(Icons.bar_chart_rounded),
+                  ),
+                  IconButton(
+                    tooltip: 'Yardım ve gizlilik',
+                    onPressed: () => Navigator.push(
+                      context,
+                      MaterialPageRoute<void>(
+                        builder: (_) => AppInfoPage(store: store),
+                      ),
+                    ),
+                    icon: const Icon(Icons.info_outline),
+                  ),
                   IconButton(
                     tooltip: 'Eser ekle',
                     onPressed: store.busy ? null : addEntry,
@@ -472,7 +555,11 @@ class _JournalShellState extends State<JournalShell>
             index: tab,
             children: [
               home(),
-              DiscoverPage(store: store, movies: widget.movies),
+              DiscoverPage(
+                store: store,
+                movies: catalog,
+                reminders: widget.reminders,
+              ),
               archive(),
             ],
           ),

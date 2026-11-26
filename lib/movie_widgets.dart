@@ -13,15 +13,17 @@ class MovieLanguageSelector extends StatelessWidget {
     super.key,
     required this.value,
     required this.onChanged,
+    this.catalogLabel = 'Film',
   });
   final MovieLocale value;
   final ValueChanged<MovieLocale>? onChanged;
+  final String catalogLabel;
   @override
   Widget build(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
       Text(
-        'Film bilgilerinin dili',
+        '$catalogLabel bilgilerinin dili',
         style: Theme.of(context).textTheme.labelLarge,
       ),
       const SizedBox(height: 6),
@@ -48,16 +50,24 @@ class MovieSuggestions extends StatefulWidget {
     required this.locale,
     required this.catalog,
     required this.onSelected,
+    this.kind = CatalogKind.film,
   });
   final String query;
   final MovieLocale locale;
   final MovieCatalog catalog;
   final ValueChanged<Movie> onSelected;
+  final CatalogKind kind;
+  String get kindLabel => switch (kind) {
+    CatalogKind.film => 'film',
+    CatalogKind.series => 'dizi',
+    CatalogKind.theatre => 'tiyatro eseri',
+  };
   @override
   State<MovieSuggestions> createState() => _MovieSuggestionsState();
 }
 
 class _MovieSuggestionsState extends State<MovieSuggestions> {
+  String get kindLabel => widget.kindLabel;
   Timer? timer;
   CancelToken? token;
   List<Movie> movies = [];
@@ -74,6 +84,7 @@ class _MovieSuggestionsState extends State<MovieSuggestions> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.query.trim() != widget.query.trim() ||
         oldWidget.locale != widget.locale ||
+        oldWidget.kind != widget.kind ||
         oldWidget.catalog != widget.catalog) {
       schedule();
     }
@@ -102,6 +113,7 @@ class _MovieSuggestionsState extends State<MovieSuggestions> {
         widget.query,
         widget.locale,
         request,
+        kind: widget.kind,
       );
       if (!mounted || request.isCancelled) return;
       setState(() => movies = result);
@@ -123,20 +135,23 @@ class _MovieSuggestionsState extends State<MovieSuggestions> {
   @override
   Widget build(BuildContext context) {
     if (!widget.catalog.isConfigured) {
-      return const Text(
-        'Film araması henüz etkin değil. Şimdilik filmini elle ekleyebilirsin.',
+      return Text(
+        '${kindLabel[0].toUpperCase()}${kindLabel.substring(1)} adını ve '
+        'istersen yaratıcı bilgisini yazarak arşivine ekleyebilirsin.',
       );
     }
     if (widget.query.trim().length < 2) {
-      return const Text('Film bulmak için en az 2 harf yaz.');
+      return Text('$kindLabel bulmak için en az 2 harf yaz.');
     }
     if (loading) {
-      return const Column(
+      return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           LinearProgressIndicator(),
           SizedBox(height: 8),
-          Text('Filmler aranıyor…'),
+          Text(
+            '${kindLabel[0].toUpperCase()}${kindLabel.substring(1)} aranıyor…',
+          ),
         ],
       );
     }
@@ -154,14 +169,14 @@ class _MovieSuggestionsState extends State<MovieSuggestions> {
       );
     }
     if (movies.isEmpty) {
-      return const Text(
-        'Eşleşen film bulunamadı. Başka bir ad deneyebilir veya elle ekleyebilirsin.',
+      return Text(
+        'Eşleşen $kindLabel bulunamadı. Başka bir ad deneyebilir veya elle ekleyebilirsin.',
       );
     }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text('Eşleşen filmler', style: Theme.of(context).textTheme.titleSmall),
+        Text('Eşleşen sonuçlar', style: Theme.of(context).textTheme.titleSmall),
         const SizedBox(height: 8),
         for (final movie in movies)
           Card(
@@ -203,7 +218,7 @@ class _MovieSuggestionsState extends State<MovieSuggestions> {
               ),
             ),
           ),
-        const TmdbAttribution(),
+        const MovieAttribution(),
       ],
     );
   }
@@ -249,7 +264,7 @@ class MovieInfo extends StatelessWidget {
             ? 'Bu film için özet bulunamadı.'
             : movie.overview,
       ),
-      const TmdbAttribution(),
+      MovieAttribution(movie: movie),
     ],
   );
 }
@@ -260,12 +275,16 @@ class MovieDetailPage extends StatefulWidget {
     required this.movie,
     required this.catalog,
     this.locale = MovieLocale.turkish,
+    this.kind = CatalogKind.film,
+    this.typeLabel = 'Film',
     this.onSave,
     this.isSaved,
   });
   final Movie movie;
   final MovieCatalog catalog;
   final MovieLocale locale;
+  final CatalogKind kind;
+  final String typeLabel;
   final Future<void> Function(Movie)? onSave;
   final bool Function(Movie)? isSaved;
   @override
@@ -294,6 +313,7 @@ class _MovieDetailPageState extends State<MovieDetailPage> {
         movie.id,
         widget.locale,
         token,
+        kind: widget.kind,
       );
       if (mounted) setState(() => movie = detailed);
     } catch (failure) {
@@ -306,7 +326,7 @@ class _MovieDetailPageState extends State<MovieDetailPage> {
   Future<void> save() async {
     if (saving || loading || widget.onSave == null) return;
     setState(() => saving = true);
-    var message = 'Film arşivine eklendi';
+    var message = '${widget.typeLabel} arşivine eklendi';
     try {
       await widget.onSave!(movie);
     } catch (_) {
@@ -329,7 +349,7 @@ class _MovieDetailPageState extends State<MovieDetailPage> {
   Widget build(BuildContext context) {
     final saved = widget.isSaved?.call(movie) ?? false;
     return Scaffold(
-      appBar: AppBar(title: const Text('Film detayı')),
+      appBar: AppBar(title: Text('${widget.typeLabel} detayı')),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),

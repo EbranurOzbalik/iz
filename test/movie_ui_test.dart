@@ -6,6 +6,8 @@ import 'package:iz/journal.dart';
 import 'package:iz/journal_entry_page.dart';
 import 'package:iz/journal_store.dart';
 import 'package:iz/main.dart';
+import 'package:iz/catalog_discovery_section.dart';
+import 'package:iz/discover_page.dart';
 import 'package:iz/movie.dart';
 import 'package:iz/movie_poster.dart';
 import 'package:iz/movie_widgets.dart';
@@ -22,10 +24,17 @@ void main() {
     await store.load();
   });
   tearDown(() => store.dispose());
-  Future<void> form(WidgetTester tester) async {
+  Future<void> form(
+    WidgetTester tester, {
+    MediaType initialType = MediaType.film,
+  }) async {
     await tester.pumpWidget(
       MaterialApp(
-        home: AddJournalEntryPage(store: store, movies: catalog),
+        home: AddJournalEntryPage(
+          store: store,
+          movies: catalog,
+          initialType: initialType,
+        ),
       ),
     );
     await tester.pumpAndSettle();
@@ -44,6 +53,32 @@ void main() {
     await tester.tap(finder);
     await tester.pump();
   }
+
+  testWidgets('Film and series language headings are not repeated', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: MovieSearchPage(store: store, catalog: catalog),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Film bilgilerinin dili'), findsOneWidget);
+    expect(find.text('Film bilgilerinin dili bilgilerinin dili'), findsNothing);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: MovieSearchPage(
+          store: store,
+          catalog: catalog,
+          type: MediaType.series,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Dizi bilgilerinin dili'), findsOneWidget);
+    expect(find.text('Dizi bilgilerinin dili bilgilerinin dili'), findsNothing);
+  });
 
   testWidgets(
     'Inline movie selection fills director and saves complete movie metadata',
@@ -131,7 +166,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(
         find.text(
-          'Film araması henüz etkin değil. Şimdilik filmini elle ekleyebilirsin.',
+          'Film adını ve istersen yaratıcı bilgisini yazarak arşivine ekleyebilirsin.',
         ),
         findsOneWidget,
       );
@@ -185,6 +220,8 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('Keşfet'));
       await tester.pumpAndSettle();
+      expect(find.text('Diziler'), findsOneWidget);
+      expect(find.text('Tiyatro'), findsOneWidget);
       await tester.tap(find.text('Filmler'));
       await tester.pumpAndSettle();
       await tester.enterText(find.byType(TextField), 'Interstellar');
@@ -199,15 +236,10 @@ void main() {
       await tester.pumpAndSettle();
       expect(store.entries, hasLength(1));
       expect(find.text('Arşivimde'), findsOneWidget);
-      await tap(tester, find.text('Film bilgileri: TMDB'));
+      await tap(tester, find.text('Film bilgileri ve görsel kaynağı'));
       await tester.pumpAndSettle();
       expect(find.byType(AboutDialog), findsOneWidget);
-      expect(
-        find.text(
-          'This product uses the TMDB API but is not endorsed or certified by TMDB.',
-        ),
-        findsOneWidget,
-      );
+      expect(find.textContaining('İZ Katalog API'), findsOneWidget);
       expect(tester.takeException(), isNull);
     },
   );
@@ -228,6 +260,83 @@ void main() {
       await tester.pumpAndSettle();
       await tester.ensureVisible(find.text('Arşivime ekle'));
       expect(find.byType(MoviePoster), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('Series use the İZ series catalog and keep episode tracking', (
+    tester,
+  ) async {
+    await form(tester, initialType: MediaType.series);
+    await search(tester, 'Interstellar');
+    await tester.pumpAndSettle();
+    expect(catalog.searches.single.kind, CatalogKind.series);
+    await tap(tester, find.text('Yıldızlararası'));
+    await tester.pumpAndSettle();
+    expect(catalog.detailKinds.single, CatalogKind.series);
+    expect(find.text('Dizi seçildi'), findsOneWidget);
+    await tap(tester, find.text('Arşivime ekle'));
+    await tester.pumpAndSettle();
+    expect(store.entries.single.type, MediaType.series);
+    expect(store.entries.single.id, 'catalog:series:157336');
+    expect(store.entries.single.tracksProgress, isTrue);
+  });
+
+  testWidgets('Theatre uses the İZ theatre catalog', (tester) async {
+    await form(tester, initialType: MediaType.theatre);
+    await search(tester, 'Hamlet');
+    await tester.pumpAndSettle();
+    expect(catalog.searches.single.kind, CatalogKind.theatre);
+    await tap(tester, find.text('Yıldızlararası'));
+    await tester.pumpAndSettle();
+    expect(find.text('Tiyatro seçildi'), findsOneWidget);
+    await tap(tester, find.text('Arşivime ekle'));
+    await tester.pumpAndSettle();
+    expect(store.entries.single.type, MediaType.theatre);
+    expect(store.entries.single.id, 'catalog:theatre:157336');
+  });
+
+  testWidgets(
+    'Theatre recommendations refresh and archive without duplicate actions',
+    (tester) async {
+      const refreshed = Movie(id: 980000001, title: 'Yeni tiyatro oyunu');
+      var calls = 0;
+      catalog.onFeatured = (_, _, _) async =>
+          calls++ == 0 ? [testMovie] : [refreshed];
+      final saved = <String>{};
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: CatalogDiscoverySection(
+              catalog: catalog,
+              type: MediaType.theatre,
+              savedIds: saved,
+              onSave: (item, type) async {
+                final entry = JournalEntry.fromCatalog(item, type);
+                await store.save(entry);
+                saved.add(entry.id);
+              },
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Yıldızlararası'), findsOneWidget);
+      await tester.tap(find.byTooltip('Tiyatro önerileri listesini yenile'));
+      await tester.pumpAndSettle();
+      expect(find.text('Yeni tiyatro oyunu'), findsOneWidget);
+      expect(find.text('Yıldızlararası'), findsNothing);
+      expect(catalog.featuredOffsets, [0, 12]);
+
+      await tester.tap(find.text('Arşive ekle'));
+      await tester.pumpAndSettle();
+      expect(store.entries, hasLength(1));
+      expect(store.entries.single.id, 'catalog:theatre:980000001');
+      expect(find.text('Arşivinde'), findsOneWidget);
+      final button = tester.widget<TextButton>(
+        find.widgetWithText(TextButton, 'Arşivinde'),
+      );
+      expect(button.onPressed, isNull);
       expect(tester.takeException(), isNull);
     },
   );

@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:iz/book.dart';
 import 'package:iz/book_discovery.dart';
+import 'package:iz/book_language.dart';
 import 'package:iz/journal_store.dart';
 
 class StubBookDiscovery implements BookDiscoverySource {
@@ -10,13 +11,22 @@ class StubBookDiscovery implements BookDiscoverySource {
   final topicCalls = <BookTopic, int>{};
 
   @override
-  Future<List<Book>> popular(CancelToken token) async {
+  Future<List<Book>> popular(
+    CancelToken token, {
+    BookLanguage language = BookLanguage.turkish,
+    int offset = 0,
+  }) async {
     popularCalls++;
     return onPopular == null ? [] : await onPopular!(token);
   }
 
   @override
-  Future<List<Book>> recommendations(BookTopic topic, CancelToken token) async {
+  Future<List<Book>> recommendations(
+    BookTopic topic,
+    CancelToken token, {
+    BookLanguage language = BookLanguage.turkish,
+    int offset = 0,
+  }) async {
     topicCalls.update(topic, (count) => count + 1, ifAbsent: () => 1);
     return onRecommendations == null
         ? []

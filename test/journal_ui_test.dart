@@ -29,6 +29,25 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  testWidgets('Android zero-size startup waits for the first usable surface', (
+    tester,
+  ) async {
+    tester.view.physicalSize = Size.zero;
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final store = await createStore();
+    await tester.pumpWidget(
+      IzApp(store: store, discovery: StubBookDiscovery()),
+    );
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    tester.view.physicalSize = const Size(393, 852);
+    await tester.pumpAndSettle();
+    expect(find.text('İlk hikâyen burada başlayacak.'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets(
     'A new journal has no fabricated activity and works at large text sizes',
     (tester) async {

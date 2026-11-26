@@ -65,7 +65,7 @@ void main() {
     'Weekly popularity uses work IDs and removes duplicate records',
     () async {
       payload = {
-        'works': [
+        'docs': [
           {
             'key': 'OL1W',
             'title': 'First',
@@ -77,11 +77,10 @@ void main() {
         ],
       };
       final books = await source.popular(CancelToken());
-      expect(
-        requests.single.path,
-        'https://openlibrary.org/trending/weekly.json',
-      );
-      expect(requests.single.queryParameters['limit'], 12);
+      expect(requests.single.path, 'https://openlibrary.org/search.json');
+      expect(requests.single.queryParameters['limit'], 24);
+      expect(requests.single.queryParameters['offset'], 0);
+      expect(requests.single.queryParameters['q'], contains('language:tur'));
       expect(books.map((book) => book.title), ['First', 'Second']);
       expect(books.first.workKey, '/works/OL1W');
       expect(books.first.authors, ['Author']);
@@ -140,9 +139,9 @@ void main() {
       for (final invalid in [
         null,
         '<html>offline</html>',
-        {'works': {}},
+        {'docs': {}},
         {
-          'works': [
+          'docs': [
             null,
             {'title': ' '},
           ],
@@ -151,7 +150,7 @@ void main() {
         payload = invalid;
         await expectLater(source.popular(CancelToken()), throwsFormatException);
       }
-      payload = {'works': []};
+      payload = {'docs': []};
       expect(await source.popular(CancelToken()), isEmpty);
     },
   );

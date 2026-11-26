@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'book.dart';
 import 'book_cover.dart';
 import 'book_discovery.dart';
+import 'book_language.dart';
 import 'journal.dart';
 
 class BookDiscoverySection extends StatefulWidget {
@@ -12,10 +13,12 @@ class BookDiscoverySection extends StatefulWidget {
     this.source,
     required this.savedBookIds,
     required this.onOpenBook,
+    this.language = BookLanguage.turkish,
   });
   final BookDiscoverySource? source;
   final Set<String> savedBookIds;
   final ValueChanged<Book> onOpenBook;
+  final BookLanguage language;
 
   @override
   State<BookDiscoverySection> createState() => _BookDiscoverySectionState();
@@ -26,6 +29,7 @@ class _ShelfState {
   bool loading = false;
   bool loaded = false;
   String? error;
+  int offset = 0;
 }
 
 class _BookDiscoverySectionState extends State<BookDiscoverySection> {
@@ -78,11 +82,36 @@ class _BookDiscoverySectionState extends State<BookDiscoverySection> {
     }
   }
 
-  void loadPopular() => load(popular, () => source.popular(token));
-  void loadTopic(BookTopic topic) => load(
-    topics.putIfAbsent(topic, _ShelfState.new),
-    () => source.recommendations(topic, token),
-  );
+  void loadPopular({bool next = false}) {
+    final requestedOffset = next ? popular.offset + 24 : popular.offset;
+    load(
+      popular,
+      () => source.popular(
+        token,
+        language: widget.language,
+        offset: requestedOffset,
+      ),
+    ).then((_) {
+      if (popular.error == null) popular.offset = requestedOffset;
+    });
+  }
+
+  void loadTopic(BookTopic topic, {bool next = false}) {
+    final state = topics.putIfAbsent(topic, _ShelfState.new);
+    final requestedOffset = next ? state.offset + 24 : state.offset;
+    load(
+      state,
+      () => source.recommendations(
+        topic,
+        token,
+        language: widget.language,
+        offset: requestedOffset,
+      ),
+    ).then((_) {
+      if (state.error == null) state.offset = requestedOffset;
+    });
+  }
+
   void selectTopic(BookTopic topic) {
     setState(() => selectedTopic = topic);
     if (topics[topic] == null) loadTopic(topic);
@@ -265,16 +294,16 @@ class _BookDiscoverySectionState extends State<BookDiscoverySection> {
       shelf(
         id: 'popular-books',
         title: 'Popüler kitaplar',
-        subtitle: 'Open Library · Bu hafta',
+        subtitle: 'Open Library · ${widget.language.label}',
         state: popular,
-        reload: loadPopular,
+        reload: () => loadPopular(next: true),
       ),
       shelf(
         id: 'recommended-${selectedTopic.name}',
         title: 'Keşfetmen için',
-        subtitle: 'Türüne göre · Türkçe baskısı olan kitaplar',
+        subtitle: 'Türüne göre · ${widget.language.label} kitaplar',
         state: topics[selectedTopic]!,
-        reload: () => loadTopic(selectedTopic),
+        reload: () => loadTopic(selectedTopic, next: true),
         excludeSaved: true,
         filters: Wrap(
           spacing: 6,

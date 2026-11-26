@@ -32,7 +32,6 @@ void main() {
     await tester.ensureVisible(find.byType(TextField));
     await tester.enterText(find.byType(TextField), query);
     await tester.ensureVisible(find.text('Kitap Ara'));
-    await tester.pumpAndSettle();
     await tester.tap(find.text('Kitap Ara'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 1));
@@ -52,6 +51,18 @@ void main() {
           ),
         );
   }
+
+  testWidgets('Typing a book name starts a debounced search', (tester) async {
+    await openSearch(tester);
+    await tester.enterText(find.byType(TextField), 'İnsan');
+    await tester.pump(const Duration(milliseconds: 449));
+    expect(requests, isEmpty);
+    await tester.pump(const Duration(milliseconds: 1));
+    expect(requests, hasLength(1));
+    expect(requests.single.queryParameters['q'], 'İnsan');
+    returnBooks([]);
+    await tester.pumpAndSettle();
+  });
 
   Future<void> loadMore(WidgetTester tester, {bool retry = false}) async {
     final button = find.text(
@@ -74,7 +85,7 @@ void main() {
 
   Future<void> selectSort(WidgetTester tester, String label) async {
     await tester.ensureVisible(find.byTooltip('Sonuçları sırala'));
-    await tester.pumpAndSettle();
+    await tester.pump();
     await tester.tap(find.byTooltip('Sonuçları sırala'));
     await tester.pumpAndSettle();
     await tester.tap(find.text(label).last);

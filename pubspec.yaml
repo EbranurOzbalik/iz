@@ -1,5 +1,5 @@
 name: iz
-description: "A new Flutter project."
+description: "Kitap, film, dizi ve tiyatro için kişisel kültür günlüğü."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
@@ -40,6 +40,10 @@ dependencies:
   flutter_localizations:
     sdk: flutter
   flutter_svg: ^2.3.0
+  url_launcher: ^6.3.2
+  package_info_plus: ^10.2.1
+  flutter_local_notifications: ^22.3.3
+  timezone: ^0.11.2
 
 dev_dependencies:
   flutter_test:
@@ -64,6 +68,7 @@ flutter:
   uses-material-design: true
   assets:
     - assets/tmdb-logo.svg
+    - assets/legal/privacy_tr.json
 
   # To add assets to your application, add an assets section, like this:
   # assets:

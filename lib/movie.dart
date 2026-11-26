@@ -6,6 +6,15 @@ enum MovieLocale {
   final String label, code;
 }
 
+enum CatalogKind {
+  film('movies'),
+  series('series'),
+  theatre('theatre');
+
+  const CatalogKind(this.path);
+  final String path;
+}
+
 class Movie {
   const Movie({
     required this.id,
@@ -13,6 +22,8 @@ class Movie {
     this.originalTitle = '',
     this.overview = '',
     this.posterPath,
+    this.posterAttributionUrl,
+    this.sourceUrl,
     this.year,
     this.runtime,
     this.directors = const [],
@@ -23,15 +34,30 @@ class Movie {
   final int id;
   final String title, originalTitle, overview;
   final String? posterPath;
+  final String? posterAttributionUrl, sourceUrl;
   final int? year, runtime;
   final List<String> directors, genres;
   final bool detailsLoaded;
 
-  String? get posterUrl =>
-      posterPath != null &&
-          RegExp(r'^/[A-Za-z0-9_-]+\.(jpg|png|webp)$').hasMatch(posterPath!)
-      ? 'https://image.tmdb.org/t/p/w500$posterPath'
-      : null;
+  String? get posterUrl {
+    final value = posterPath?.trim();
+    if (value == null || value.isEmpty) return null;
+    if (RegExp(r'^/[A-Za-z0-9_-]+\.(jpg|png|webp)$').hasMatch(value)) {
+      return 'https://image.tmdb.org/t/p/w500$value';
+    }
+    final uri = Uri.tryParse(value);
+    if (uri?.scheme == 'https' &&
+        {
+          'commons.wikimedia.org',
+          'upload.wikimedia.org',
+          'static.tvmaze.com',
+          'biletsa.com',
+        }.contains(uri?.host)) {
+      return uri.toString();
+    }
+    return null;
+  }
+
   String get summary => [
     if (year != null) '$year',
     if (runtime != null) '$runtime dk',
@@ -87,12 +113,43 @@ class Movie {
     );
   }
 
+  factory Movie.fromIzApi(
+    Map<String, dynamic> data, {
+    bool detailsLoaded = false,
+  }) {
+    final id = data['id'];
+    final title = _text(data['title']);
+    if (id is! int || id <= 0 || title.isEmpty) {
+      throw const FormatException('Geçersiz film kaydı');
+    }
+    final year = data['year'];
+    final runtime = data['runtime'];
+    return Movie(
+      id: id,
+      title: title,
+      originalTitle: _text(data['original_title']),
+      overview: _text(data['overview']),
+      posterPath: data['poster_url'] is String ? data['poster_url'] : null,
+      posterAttributionUrl: data['poster_attribution_url'] is String
+          ? data['poster_attribution_url']
+          : null,
+      sourceUrl: data['source_url'] is String ? data['source_url'] : null,
+      year: year is int && year > 1800 ? year : null,
+      runtime: runtime is int && runtime > 0 ? runtime : null,
+      directors: _names(data['directors']),
+      genres: _names(data['genres']),
+      detailsLoaded: detailsLoaded,
+    );
+  }
+
   Map<String, Object?> toJson() => {
     'id': id,
     'title': title,
     'originalTitle': originalTitle,
     'overview': overview,
     'posterPath': posterPath,
+    'posterAttributionUrl': posterAttributionUrl,
+    'sourceUrl': sourceUrl,
     'year': year,
     'runtime': runtime,
     'directors': directors,
@@ -107,6 +164,8 @@ class Movie {
       originalTitle: data['originalTitle'] as String? ?? '',
       overview: data['overview'] as String? ?? '',
       posterPath: data['posterPath'] as String?,
+      posterAttributionUrl: data['posterAttributionUrl'] as String?,
+      sourceUrl: data['sourceUrl'] as String?,
       year: data['year'] as int?,
       runtime: data['runtime'] as int?,
       directors: _names(data['directors']),

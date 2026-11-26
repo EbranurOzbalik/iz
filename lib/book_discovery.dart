@@ -14,8 +14,17 @@ enum BookTopic {
 }
 
 abstract interface class BookDiscoverySource {
-  Future<List<Book>> popular(CancelToken cancelToken);
-  Future<List<Book>> recommendations(BookTopic topic, CancelToken cancelToken);
+  Future<List<Book>> popular(
+    CancelToken cancelToken, {
+    BookLanguage language = BookLanguage.turkish,
+    int offset = 0,
+  });
+  Future<List<Book>> recommendations(
+    BookTopic topic,
+    CancelToken cancelToken, {
+    BookLanguage language = BookLanguage.turkish,
+    int offset = 0,
+  });
 }
 
 class OpenLibraryDiscovery implements BookDiscoverySource {
@@ -55,27 +64,44 @@ class OpenLibraryDiscovery implements BookDiscoverySource {
   }
 
   @override
-  Future<List<Book>> popular(CancelToken cancelToken) async {
+  Future<List<Book>> popular(
+    CancelToken cancelToken, {
+    BookLanguage language = BookLanguage.turkish,
+    int offset = 0,
+  }) async {
     final response = await _dio.get(
-      'https://openlibrary.org/trending/weekly.json',
-      queryParameters: {'limit': 12},
+      'https://openlibrary.org/search.json',
+      queryParameters: {
+        'q': 'language:${language.code} AND cover_i:[1 TO *]',
+        'lang': language.locale,
+        'sort': 'readinglog',
+        'limit': 24,
+        'offset': offset,
+        'fields':
+            'key,title,subtitle,author_name,first_publish_year,edition_count,'
+            'cover_i,editions,editions.key,editions.title,editions.subtitle,editions.cover_i',
+      },
       cancelToken: cancelToken,
     );
-    return _books(response.data, 'works');
+    return _books(response.data, 'docs');
   }
 
   @override
   Future<List<Book>> recommendations(
     BookTopic topic,
-    CancelToken cancelToken,
-  ) async {
+    CancelToken cancelToken, {
+    BookLanguage language = BookLanguage.turkish,
+    int offset = 0,
+  }) async {
     final response = await _dio.get(
       'https://openlibrary.org/search.json',
       queryParameters: {
-        'q': 'language:tur AND subject:${topic.subject} AND cover_i:[1 TO *]',
-        'lang': 'tr',
+        'q':
+            'language:${language.code} AND subject:${topic.subject} AND cover_i:[1 TO *]',
+        'lang': language.locale,
         'sort': 'readinglog',
         'limit': 24,
+        'offset': offset,
         'fields':
             'key,title,subtitle,author_name,first_publish_year,edition_count,'
             'cover_i,editions,editions.key,editions.title,editions.subtitle,editions.cover_i',

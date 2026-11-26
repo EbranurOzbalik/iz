@@ -18,6 +18,7 @@ class MoviePoster extends StatelessWidget {
         ),
       ),
     );
+
     return ClipRRect(
       borderRadius: BorderRadius.circular(8),
       child: SizedBox(

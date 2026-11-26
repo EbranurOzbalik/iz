@@ -1,4 +1,4 @@
-package com.example.iz
+package com.ebranurozbalik.iz
 
 import io.flutter.embedding.android.FlutterActivity
 

@@ -69,6 +69,112 @@ void main() {
     }
   });
 
+  test('Biletsa theatre posters are accepted without trusting other hosts', () {
+    const poster = 'https://biletsa.com/api/dosya/oyun.jpg';
+    expect(
+      const Movie(id: 980000001, title: 'Oyun', posterPath: poster).posterUrl,
+      poster,
+    );
+    expect(
+      const Movie(
+        id: 980000001,
+        title: 'Oyun',
+        posterPath: 'https://example.com/oyun.jpg',
+      ).posterUrl,
+      isNull,
+    );
+  });
+
+  group('İZ Katalog API requests', () {
+    late Dio dio;
+    late IzMovieCatalog catalog;
+    late List<RequestOptions> requests;
+    Object? payload;
+
+    setUp(() {
+      requests = [];
+      dio = Dio();
+      catalog = IzMovieCatalog(dio: dio, baseUrl: 'https://api.iz.example/');
+      dio.interceptors.add(
+        InterceptorsWrapper(
+          onRequest: (request, handler) {
+            requests.add(request);
+            handler.resolve(Response(requestOptions: request, data: payload));
+          },
+        ),
+      );
+    });
+    tearDown(() => dio.close(force: true));
+
+    test(
+      'search uses only the İZ endpoint and parses open-data sources',
+      () async {
+        payload = {
+          'results': [
+            {
+              'id': 42,
+              'title': 'Örnek Film',
+              'original_title': 'Example Film',
+              'overview': 'Açıklama',
+              'poster_url':
+                  'https://commons.wikimedia.org/wiki/Special:Redirect/file/Poster.jpg?width=500',
+              'poster_attribution_url':
+                  'https://commons.wikimedia.org/wiki/File:Poster.jpg',
+              'source_url': 'https://www.wikidata.org/wiki/Q42',
+              'year': 2024,
+              'runtime': 123,
+              'directors': ['Yönetmen'],
+              'genres': ['Drama'],
+            },
+          ],
+        };
+        final movies = await catalog.search(
+          ' Örnek ',
+          MovieLocale.turkish,
+          CancelToken(),
+        );
+        expect(movies, hasLength(1));
+        expect(
+          movies.single.posterUrl,
+          startsWith('https://commons.wikimedia.org/'),
+        );
+        expect(movies.single.sourceUrl, 'https://www.wikidata.org/wiki/Q42');
+        expect(requests.single.uri.host, 'api.iz.example');
+        expect(requests.single.uri.path, '/v1/movies/search');
+        expect(requests.single.uri.queryParameters, {
+          'q': 'Örnek',
+          'lang': 'tr',
+        });
+      },
+    );
+
+    test(
+      'details and URL validation keep traffic on the configured API',
+      () async {
+        payload = {'id': 42, 'title': 'Film'};
+        final movie = await catalog.details(
+          42,
+          MovieLocale.english,
+          CancelToken(),
+        );
+        expect(movie.detailsLoaded, isTrue);
+        expect(requests.single.uri.path, '/v1/movies/42');
+        expect(requests.single.uri.queryParameters, {'lang': 'en'});
+        expect(
+          IzMovieCatalog(dio: dio, baseUrl: 'http://example.com').isConfigured,
+          isFalse,
+        );
+        expect(
+          IzMovieCatalog(
+            dio: dio,
+            baseUrl: 'http://10.0.2.2:8787',
+          ).isConfigured,
+          isTrue,
+        );
+      },
+    );
+  });
+
   group('TMDB requests', () {
     late Dio dio;
     late TmdbMovieCatalog catalog;
